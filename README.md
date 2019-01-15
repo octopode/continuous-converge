@@ -49,9 +49,11 @@ first run, to ensure the same trait cutoff values.
 * At time of writing, `pcoc_cont_scenarios` runs `pcoc_det` through a system call.
 This is because `pcoc_det.py` as provided has no `main()`, and it means the user
 should check the `subprocess.call()` call in `pcoc_cont_scenarios.py` to make
-sure it's compatible with their shell environment. 
+sure it's compatible with their shell environment. `pcoc_det` also requires
+module `Bpp` (Bio++), which apparently changes a lot.
 
-An alternative to this is to use the Docker container distributed with PCOC:
+A straightforward solution to these issues is to use the Docker container 
+distributed with PCOC:
 ```docker pull carinerey/pcoc```
 and then install additional dependencies in it:
 ```
@@ -61,9 +63,22 @@ pip install pandas biopython matplotlib
 and then outside the container:
 ```docker commit <container ID> pcoc-matplot```
 
-> Both the above concerns will go away when I refactor `pcoc_det.py` to use a `main()` 
-and implement a more efficient system for storing PCOC results indexed 
+> The shell issue will go away when I refactor `pcoc_det.py` to use
+a `main()` and implement a more efficient system for storing PCOC results indexed 
 by _scenario_ rather than by _cutoff_.
+
+### Example
+
+To run `pcoc_cont_scenarios` in the Docker container, do something like this:
+```
+cd continuous-converge/
+# or other dir containing both the repo and your data
+# launch Docker container with $pwd mounted as /data/
+docker run --mount type=bind,source="$(pwd)",target=/data/ -it pcoc-matplot /bin/bash
+# run pcoc_cont_scenarios.py on your data. For the example dataset inside the repo:
+xvfb-run python2 /data/pcoc_cont_scenarios.py -t example/FPs_data/tree/RAxML_bipartitions.FPs_62genes_MAFFT-gblocks-raxML-ultram.tree -o example/results -c example/FPs_data/trait/FPemWL_62genes_noref.tab -aa example/FPs_data/seq/FPs_62genes_MAFFT.fasta -p 2 -d -k _Avictoria -m master-table_2nm.tab -hm heatmap_2nm.pdf -mp manhattan_2nm.pdf
+# ^xvfb-run is needed for graphics functionality in Docker
+```
 
 ## CPGLS: Columnwise Phylogenetic Least-Squares
 This is an original method based on phylogenetic regression _sensu_ Grafen 1989.
@@ -119,3 +134,11 @@ p-value for each, using any applicable multi-test correction.
 	to correlate continuous trait change with profile change along branches.
 	
 * CPGLS is roughly 10x faster than PCOC as presently implemented.
+
+### Example
+
+(no need to run from a Docker container or anything)
+
+```
+python2 cpgls.py -r example/FPs_data/trait/FPemWL_62genes_noref.tab -p example/FPs_data/seq/FPs_62genes_MAFFT.fasta -k _Avictoria -t example/FPs_data/tree/RAxML_bipartitions.FPs_62genes_MAFFT-gblocks-raxML-ultram.tree -m > FPs-pgls.tab
+```

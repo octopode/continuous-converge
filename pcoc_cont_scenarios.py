@@ -37,47 +37,46 @@ import os
 import sys
 import subprocess
 import argparse
-import time
+import datetime
 import numpy as np
 import pandas as pd
 from ete3 import Tree, NodeStyle, TreeStyle, TextFace, CircleFace
-from matplotlib.colors import LinearSegmentedColormap
 from re import findall
 from pprint import pprint
 from Bio import AlignIO
 from wl2rgb import wavelength_to_rgb
 import pcoc_cont_heatmap as heatmapper
-from time import sleep
 
 ##########
 # inputs #
 ##########
-start_time = time.time()
+startDateTime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 ### Option defining
-parser = argparse.ArgumentParser(prog="pcoc_num_tree.py",
-                                 description='')
+parser = argparse.ArgumentParser(prog="pcoc_num_tree.py", description='')
 parser.add_argument('--version', action='version', version='%(prog)s 1.0')
 
 ##############
 requiredOptions = parser.add_argument_group('Required arguments')
-requiredOptions.add_argument('-t', "--tree", type=str,
-                             help='input tree name', required=True)
-requiredOptions.add_argument('-o', '--output', type=str,
-                   help="Output directory", required=True)
+requiredOptions.add_argument('-t', "--tree", type=str, help='input tree name', required=True)
+requiredOptions.add_argument('-o', '--output', type=str, help="Output directory", required=True)
+requiredOptions.add_argument('-c', '--cont_trait_table', type=str, help="trait table name")
 ##############
 Options = parser.add_argument_group('Options')
-Options.add_argument('-c', '--cont_trait_table', type=str, help="trait table name")
 Options.add_argument('-aa', '--aa_align', type=str, help="AA alignment name")
 Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
-Options.add_argument('-tt', '--test_trees', action="store_true", help="Draw test trees to evaluate the discretization scheme")
-Options.add_argument('-i', '--low_val_convergent', action="store_true", help="Consider low trait value to be convergent state, i.e. invert the trait")
+Options.add_argument('-tt', '--test_trees', action="store_true",
+                     help="Draw test trees to evaluate the discretization scheme")
+Options.add_argument('-i', '--invert_trait', action="store_true",
+                     help="Invert the binary trait, i.e. assert that low trait value is the convergent state")
 Options.add_argument('-d', '--det', action="store_true", help="Set to actually run pcoc_det.py")
-Options.add_argument('-f', '--float', action="store_true", help="Store trait cutoffs as floating-point values")
-Options.add_argument('-p', '--precision', type=float, default=0.0, help="Minimum difference in trait cutoffs between consecutive scenarios to be tested")
-Options.add_argument('-hm', '--heatmap', type=str, help="Render heatmap from the latest available set of data and save it here")
-#Options.add_argument('-m', '--master_table', action="store_true", help="Print concatenated (master) data table to stdout")
-Options.add_argument('-m', '--master_table', type=str, help="Save concatenated (master) data table at...") # TODO: have this go to stdout, but for some reason my stderr goes there too!
+Options.add_argument('-f', '--float', type=int, default=None, help="Store trait cutoffs as floating-point values")
+Options.add_argument('-p', '--precision', type=float, default=0.0,
+                     help="Minimum difference in trait cutoffs between consecutive scenarios to be tested")
+Options.add_argument('-hm', '--heatmap', type=str,
+                     help="Render heatmap from the latest available set of data and save it here")
+Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
+#TODO: have master table go to stdout, but for some reason my stderr goes there too!
 Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot at...")
 ##############
 
@@ -85,12 +84,9 @@ Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot a
 #global args
 args = parser.parse_args()
 
-### Number tree nodes
+### Number tree nodes for consistent reference
 def init_tree(nf):
     t = Tree(nf)
-
-    #Alternatively we could read a tree from a file into a string "line", and then use:
-    # t =  Tree( line )
 
     nodeId = 0
     for n in t.traverse("postorder"):
@@ -99,8 +95,7 @@ def init_tree(nf):
 
     return t
 
-
-### Perform continuous-trait ancestral state reconstruction. Return list of trait values indexed on node #.
+### Perform BM continuous-trait ancestral state reconstruction. Return list of trait values indexed on node #.
 def ancR(tree, tipTraits):
 
     # Check that the trait list has values for all leaves
@@ -139,11 +134,10 @@ def ancR(tree, tipTraits):
 
     return nodeTraits
 
-
+### Iteratively discretize continuous trait into binary matrix
 def discretize(nodeTraits, precision):
-    ### Iteratively discretize continuous trait into binary matrix
 
-    traitMatrix = pd.DataFrame()
+    binDF = pd.DataFrame()
 
     nodeTraitsUnique = np.unique(nodeTraits) # returns sorted unique vals
 
@@ -151,104 +145,132 @@ def discretize(nodeTraits, precision):
     cutoffs = list()
     numPossibleCutoffs = len(nodeTraitsUnique) - 1
     for i in range(0, numPossibleCutoffs):
-        if nodeTraitsUnique[i+1] - nodeTraitsUnique[i] >= precision: # only if the trait values are far enough apart
-            cutoffs.append((nodeTraitsUnique[i]+nodeTraitsUnique[i+1])/2) # place a cutoff in between those values
+        # if the trait values are far enough apart
+        if nodeTraitsUnique[i+1] - nodeTraitsUnique[i] >= precision:
+            # place a cutoff smack in between those values
+            cutoffs.append((nodeTraitsUnique[i]+nodeTraitsUnique[i+1])/2)
 
-    # ^REPLACES:
-    '''# place cutoffs smack in-between traits in rank order. This does *not* necessarily try a cut on every branch.
-    cutoffs = [None] * (len(nodeTraitsUnique)-1)
-    for i in range(0, len(cutoffs)):
-        cutoffs[i] = int((nodeTraitsUnique[i]+nodeTraitsUnique[i+1])/2)'''
+    #print >> sys.stderr, "Used precision of " + str(precision) + " trait units to choose " + str(len(cutoffs)) + "/" + str(numPossibleCutoffs) + " possible cutoffs"
+    print >> sys.stderr, "# MESSAGE: Used precision of {} trait units to choose {}/{} possible cutoffs".format(precision, len(cutoffs), numPossibleCutoffs)
 
-    print >> sys.stderr, "Used precision of " + str(precision) + " trait units to choose " + str(len(cutoffs)) + "/" + str(numPossibleCutoffs) + " possible cutoffs"
-
-    traitMatrix["trait_cont"] = nodeTraits
+    # put traits into DF col 0
+    binDF["trait_cont"] = nodeTraits
 
     for cutoff in np.unique(cutoffs):
         if not args.float: # round the cutoff to int
             opColumn = "trait_cutoff_" + str(int(cutoff))
         else: # keep it floating
             opColumn = "trait_cutoff_" + str(cutoff)
-        traitMatrix[opColumn] = pd.cut(traitMatrix["trait_cont"], [min(nodeTraits)]+[cutoff]+[max(nodeTraits)], include_lowest=True, labels=False)
+        binDF[opColumn] = pd.cut(binDF["trait_cont"], [min(nodeTraits)]+[cutoff]+[max(nodeTraits)], include_lowest=True, labels=False)
 
-    return traitMatrix
+    # drop the first column, which contains continuous trait values
+    binDF = binDF.drop(binDF.columns[0], axis=1)
 
+    # convert binary values to Boolean
+    if args.invert_trait:
+        # invert the trait if specified
+        binDF = ~binDF.astype(bool)
+    else:
+        # otherwise high trait value is considered the convergent state
+        binDF = binDF.astype(bool)
 
-def uniqueFilter(traitMatrix):
-    # Consolidate scenarios that are identical under their average header value
+    return binDF
 
-    #print >> sys.stderr, "pre-dedup-filter:"
-    #traitMatrix.to_csv(sys.stderr, sep='\t') #TEST
+### Consolidate identical scenarios under their average header value
+### This filter is topology-agnostic, so works on the binary trait matrix only
+def uniqueColumnFilter(binDF):
 
+    chaff = pd.DataFrame() # init DF for dropped columns
+    origNumScenarios = binDF.shape[1]
     keyIndex = 0
-    while keyIndex < len(traitMatrix.columns): # need a while loop because this routine is recursive
-    #for keyIndex, keyColname in enumerate(list(traitMatrix)):
-        keyColname = list(traitMatrix)[keyIndex]
-        if len(findall( r'\d+\.*\d*', keyColname)) != 0: # if there is a numeric trait value in the colname
-            averageMe = [float(findall( r'\d+\.*\d*', keyColname)[0])] # init a list of names of columns to be consolidated
-            keyCol = traitMatrix[keyColname] # this is the column that others will be compared to
-            for colname in list(traitMatrix)[keyIndex+1:]: # iterate through the remaining columns
-                col = traitMatrix[colname]
-                if col is keyCol: # if one matches the key column
-                    averageMe.append(float(findall( r'\d+\.*\d*', colname)[0])) # add its name to the list to be averaged
-                    traitMatrix = traitMatrix.drop(colname) # and drop it from the matrix.
+
+    while keyIndex < len(binDF.columns): # need a while loop because this routine is recursive
+        keyColName = list(binDF)[keyIndex]
+        # if there is a numeric trait value in the colName
+        if len(findall( r'\d+\.*\d*', keyColName)) != 0:
+            # init a list of names of columns to be consolidated
+            averageMe = [float(findall( r'\d+\.*\d*', keyColName)[0])]
+            keyCol = binDF[keyColName] # this is the column that others will be compared to
+            # iterate through the remaining columns
+            for colName in list(binDF)[keyIndex+1:]:
+                col = binDF[colName]
+                # if one matches the key column
+                if col is keyCol:
+                    # add its cutoff to the list to be averaged
+                    averageMe.append(float(findall( r'\d+\.*\d*', colName)[0]))
+                    # and put it in the chaff DF
+                    chaff[colName] = binDF[colName]
             # once all duplicates are dropped, rename the key column with the mean cutoff of all the duplicates
-            traitMatrix = traitMatrix.rename(index=str, columns={str(keyColname) : "trait_cutoff_"+str(np.mean(averageMe))})
+            binDF = binDF.rename(index=str, columns={str(keyColName) : "trait_cutoff_"+str(np.mean(averageMe))})
         keyIndex += 1
 
-    #print >> sys.stderr, "post-dedup-filter:"
-    #traitMatrix.to_csv(sys.stderr, sep='\t')  #TEST
+    numRedundant = chaff.shape[1]
+    chaffCutoffs = [float(findall(r'\d+\.*\d*', colName)[0]) for colName in chaff.columns]
 
-    return traitMatrix
+    # if any scenarios were non-unique
+    if numRedundant:
+        # list them
+        print >> sys.stderr, "# MESSAGE: {}/{} scenarios were redundant:".format(numRedundant, origNumScenarios)
+        print >> sys.stderr, "{}".format(chaffCutoffs)
 
+    return binDF, chaff
 
-def scenarioStrings(binDf, tree):
+### Remove and report on scenarios in which the root is called convergent
+### root status is deduced from the row names, which are post-order node IDs
+def convergentRootFilter(binDF):
+
+    chaff = pd.DataFrame() # init DF for dropped columns
+    origNumScenarios = binDF.shape[1]
+
+    for colNum, colName in enumerate(binDF.columns):
+        for node, state in enumerate(binDF[colName]):
+            # if node is convergent AND also the root
+            if state & (node == binDF.shape[0] - 1):
+                # put it in the chaff DF
+                #print binDF[colName] #TEST
+                chaff[colName] = binDF[colName]
+                # and drop it from the matrix
+                binDF.drop(colName, inplace=True, axis=1) # Not sure whether drop() can take a whole column or needs a colname!!
+
+    # notify user of outcome of root filter
+    numRootConv = chaff.shape[1]
+    chaffCutoffs = [float(findall( r'\d+\.*\d*', colName)[0]) for colName in chaff.columns]
+
+    print >> sys.stderr, "# MESSAGE: {}/{} scenarios eliminated due to convergent root:".format(numRootConv, origNumScenarios)
+    print >> sys.stderr, "{}".format(chaffCutoffs)
+
+    if numRootConv >= origNumScenarios / 2:
+        print >> sys.stderr, "# WARNING: Consider inverting your trait!"
+
+    #print binDF #TEST
+
+    return binDF, chaff
+
+### Use tree and binary trait matrix to generate 'convergent scenario' strings readable by PCOC scripts
+def scenarioStrings(binDF, tree):
 
     # scenario strings keyed on cutoff value
     scenarios = dict()
 
-    # maybe this could be thinned out by actually making the matrix bool()
-    if args.low_val_convergent:
-        # invert the trait if specified
-        binDf = ~binDf.astype(bool)
-    else:
-        # otherwise high trait value is considered the convergent state
-        binDf = binDf.astype(bool)
-
-    # count and remove scenarios where the root is convergent
-    numRootConv = 0
-    for col in binDf.columns:
-        rootConv = False
+    for col in binDF.columns:
         scenario = str()
-        for node, state in enumerate(binDf[col]):
-            if state:
-                if node != binDf.shape[0]-1: #if not the root node
-                    parentND = tree.search_nodes(ND=node)[0].up.ND
-                    if binDf[col][parentND]:
-                        scenario = ','+str(node)+scenario
-                    else:
-                        scenario = '/' + str(node) + scenario
-                else: #if the root node is convergent
+        for node, state in enumerate(binDF[col]):
+            # if convergent state is true
+            if state & (node < binDF.shape[0] - 1):
+                parentND = tree.search_nodes(ND=node)[0].up.ND
+                if binDF[col][parentND]:
                     scenario = ',' + str(node) + scenario
-                    rootConv = True
-                    numRootConv += 1
+                else:
+                    scenario = '/' + str(node) + scenario
 
-        if rootConv == False:
-            # key on a sanitized form of the cutoff value
-            scenarios[float(findall( r'\d+\.*\d*', col)[0])] = scenario[1:]
+        # remove leading '/' and add scenario to dict, keyed on cutoff
+        scenarios[float(findall(r'\d+\.*\d*', col)[0])] = scenario[1:]
 
-    # notify user of outcome of root filter
-    print str(numRootConv) + "/" + str(len(scenarios) + numRootConv) + " scenarios eliminated due to convergent root"
-    if numRootConv >= (len(scenarios) + numRootConv)/2:
-        print "Consider inverting your trait!"
-
-    # to get unique scenarios, I'd have to filter the entries with unique values. But then which key would I use?
-    # better to filter unique downstream of the precision filter.
     return scenarios
 
-
+### Gather up *all* the output files in ScenDir and put them into a master dataframe
 def consolidatePCOCOutput(scenarios, scenDir):
-    # gather up all the output files (unfiltered) and put them into a master dataframe
+
     metaDf = pd.DataFrame()
     propTable = os.path.splitext(os.path.basename(args.aa_align))[:-1][
                     0] + ".results.tsv"  # get the output file from the latest run
@@ -263,11 +285,55 @@ def consolidatePCOCOutput(scenarios, scenDir):
             cutoffPPs["cutoff"] = cutoff
             metaDf = metaDf.append(cutoffPPs)
         except:
-            print >> sys.stdout, "Warning: cutoff " + str(cutoff) + " not loaded"
+            print >> sys.stdout, "# WARNING: Cutoff " + str(cutoff) + " not loaded"
 
     return metaDf
 
-def traitTreeOld(traits, mapper):
+### return list of columns of an alignment that are not gaps in the key sequence
+def keyAlignmentColumns(algt, keySeqID):
+    
+    algtLength = algt.get_alignment_length()
+
+    # Get the key sequence
+    for record in algt:
+        if record.id == keySeqID:
+            keySeq = record.seq
+
+    mappedCols = [None] * len(str(keySeq).replace('-', ''))
+    keyIndex = 0
+    for i in range(algtLength):  # only iterate over columns that are not gaps in target seq
+        if keySeq[i] != "-":  # meaning anything except gaps
+            mappedCols[keyIndex] = i + 1  # map the alignment column to the key column. Gotta shift the index!
+            keyIndex += 1
+
+    return mappedCols
+
+## ETE3 TREE-VIZ FUNCTIONS ##
+
+# basic tree style
+tree_style = TreeStyle()
+tree_style.show_leaf_name = False
+tree_style.show_branch_length = False
+tree_style.draw_guiding_lines = True
+tree_style.complete_branch_lines_when_necessary = True
+
+# make tree grow upward
+tree_style.rotation = 270
+# and make it appear ultrametric (which it is!)
+tree_style.optimal_scale_level = "full"
+
+# internal node style
+nstyle = NodeStyle()
+nstyle["fgcolor"] = "black"
+nstyle["size"] = 0
+
+# terminal node style
+nstyle_L = NodeStyle()
+nstyle["fgcolor"] = "black"
+nstyle["size"] = 0
+
+### Draw a tree with nodes color-coded and labeled by trait value
+def traitTree(traits, mapper, outDir):
     ### Take dict of traits and [R,G,B]-returning function
     ### Draw a tree with the continuous trait painted on via a colormapping function
 
@@ -293,13 +359,14 @@ def traitTreeOld(traits, mapper):
         n.add_face(nd, column=0, position="float")
         n.add_face(TextFace("       "), column=0, position="branch-bottom")
 
-    outfile = args.output + "/test_trees/cont_trait.pdf"
-    tree.render(outfile, tree_style=tree_style)
-    print >> sys.stderr, outfile
+    #outFile = args.output + "/test_trees/cont_trait.pdf"
+    outFile = outDir + "/cont_trait.pdf"
+    tree.render(outFile, tree_style=tree_style)
+    print >> sys.stderr, outFile
     # no return
 
-
-def traitTree(traits, mapper):
+### Draw a tree with grey branches and black nodes
+def traitTreeMinimal(traits, mapper):
     ### Take dict of traits and [R,G,B]-returning function
     ### Draw a tree with the continuous trait painted on via a colormapping function
     def rgb2hex(r, g, b):
@@ -307,7 +374,6 @@ def traitTree(traits, mapper):
         return hex
 
     ts = TreeStyle()
-    #ts.allow_face_overlap = True
     ts.show_leaf_name = False
     ts.rotation = 270
     ts.complete_branch_lines_when_necessary = False
@@ -328,20 +394,67 @@ def traitTree(traits, mapper):
         n.set_style(nstyle)
         n.add_face(nf, column=0, position='branch-top')
 
-    #for n in tree.traverse():
-    #    chroma = rgb2hex(*[int(val) for val in mapper(traits[n.ND], gamma=0.8, scaleMax=255)]) # setup for wl2RGB
-    #    nd = CircleFace(radius=3, color=chroma)  # label with rounded continuous trait value
-    #    nd.hz_align = 1
-    #    #add_face_to_node(nd, n, column=0, aligned=False, position='branch-right')
-    #    n.add_face(nd, column=0, position='float')
-
-    outfile = args.output + "/test_trees/cont_trait.pdf"
-    tree.render(outfile, tree_style=ts)
-    print >> sys.stderr, outfile
+    outFile = args.output + "/test_trees/cont_trait.pdf"
+    tree.render(outFile, tree_style=ts)
+    print >> sys.stderr, outFile
     # no return
 
+### Draw test trees in the standard visual style used by pcoc_num_tree.py
+def testTrees(scenarios, outDir):
 
-def testTrees(scenarios, traits, mapper):
+    ### Draw test trees. This is a modified version of the test routine in pcoc_num_tree.py, stuffed in a for loop
+    for cutoff in sorted(scenarios.keys()):
+        tree = init_tree(args.tree)
+        # not mucking with additive trees yet; ultrametrize the tree and normalize to length 1
+        tree.convert_to_ultrametric(tree_length=1)
+        manual_mode_nodes = {}
+        manual_mode_nodes = {"T": [], "C": []}
+        p_events = scenarios[cutoff].strip().split("/")
+        for e in p_events:
+            l_e = map(int, e.split(","))
+            manual_mode_nodes["T"].append(l_e[0])
+            manual_mode_nodes["C"].extend(l_e[1:])
+
+        for n in tree.traverse():
+            if n.is_leaf():
+                n.set_style(nstyle_L)
+                n.add_face(TextFace(str(n.name)), column=0, position="aligned")
+            else:
+                n.set_style(nstyle)
+            nd = TextFace(str(n.ND))
+
+            if manual_mode_nodes:
+                if n.ND in manual_mode_nodes["T"]:
+                    nd.background.color = "red"
+                elif n.ND in manual_mode_nodes["C"]:
+                    nd.background.color = "orange"
+                else:
+                    nd.background.color = "white"
+            else:
+                nd.background.color = "white"
+                nd.background.color = "white"
+            nd.margin_right = 2
+            nd.margin_top = 1
+            nd.margin_left = 2
+            nd.margin_bottom = 1
+            nd.border.width = 1
+            n.add_face(nd, column=0, position="float")
+            n.add_face(TextFace("       "), column=0, position="branch-bottom")
+
+        # if --float set, limit number of digits in filename
+        if args.float:
+            outFile = str(cutoff).replace('.','_')[:np.min([args.float, len(str(cutoff))])] + ".pdf"
+        else:
+            outFile = str(cutoff).replace('.', '_') + ".pdf"
+
+        # prepend path to filename
+        outFile = outDir + '/' + outFile
+        tree.render(outFile, tree_style=tree_style)
+        print >> sys.stderr, outFile
+        # no return
+
+### draw color-coded test trees with node convergent status indicated by colored box
+def testTreesMinimal(scenarios, traits, mapper):
 
     def rgb2hex(r, g, b):
         hex = "#{:02x}{:02x}{:02x}".format(r, g, b)
@@ -402,66 +515,16 @@ def testTrees(scenarios, traits, mapper):
                 n.set_style(nstyle)
                 n.add_face(nf, column=0, position='branch-top')
 
-
         # limiting number of digits
-        outfile = args.output + "/test_trees/" + str(cutoff).replace('.','_')[:np.min([5, len(str(cutoff))])] + ".pdf"
-        tree.render(outfile, tree_style=ts)
-        print >> sys.stderr, outfile
+        outFile = args.output + "/test_trees/" + str(cutoff).replace('.','_')[:np.min([5, len(str(cutoff))])] + ".pdf"
+        tree.render(outFile, tree_style=ts)
+        print >> sys.stderr, outFile
         # no return
 
-
-
-def testTreesOld(scenarios, tree_style):
-    ### Draw test trees. This is a modified version of the test routine in pcoc_num_tree.py, stuffed in a for loop
-    for cutoff in sorted(scenarios.keys()):
-        tree = init_tree(args.tree)
-        # not mucking with additive trees yet; ultrametrize the tree and normalize to length 1
-        tree.convert_to_ultrametric(tree_length=1)
-        manual_mode_nodes = {}
-        manual_mode_nodes = {"T": [], "C": []}
-        p_events = scenarios[cutoff].strip().split("/")
-        for e in p_events:
-            l_e = map(int, e.split(","))
-            manual_mode_nodes["T"].append(l_e[0])
-            manual_mode_nodes["C"].extend(l_e[1:])
-
-        for n in tree.traverse():
-            if n.is_leaf():
-                n.set_style(nstyle_L)
-                n.add_face(TextFace(str(n.name)), column=0, position="aligned")
-            else:
-                n.set_style(nstyle)
-            nd = TextFace(str(n.ND))
-
-            if manual_mode_nodes:
-                if n.ND in manual_mode_nodes["T"]:
-                    nd.background.color = "red"
-                elif n.ND in manual_mode_nodes["C"]:
-                    nd.background.color = "orange"
-                else:
-                    nd.background.color = "white"
-            else:
-                nd.background.color = "white"
-                nd.background.color = "white"
-            nd.margin_right = 2
-            nd.margin_top = 1
-            nd.margin_left = 2
-            nd.margin_bottom = 1
-            nd.border.width = 1
-            n.add_face(nd, column=0, position="float")
-            n.add_face(TextFace("       "), column=0, position="branch-bottom")
-
-        # limiting number of digits
-        outfile = args.output + "/test_trees/" + str(cutoff).replace('.','_')[:np.min([5, len(str(cutoff))])] + ".pdf"
-        tree.render(outfile, tree_style=tree_style)
-        print >> sys.stderr, outfile
-        # no return
-
-
+### draw a Manhattan plot of the summed PPs
 def manhattanPlot(df, outPath, keyID=None):
     # at present this is meant to be run once
     import matplotlib.pyplot as plt
-    import math
 
     fig, ax = plt.subplots()
     x = [i+1 for i in range(len(df))]
@@ -478,12 +541,11 @@ def manhattanPlot(df, outPath, keyID=None):
             ax.set_xlabel("alignment column")
     ax.set_ylabel("total PCOC PP", fontsize=20)
 
-    #pThresholds = (1, 0.05, 0.01, 0.001)
-    #pThresholds = [-math.log10(p) for p in pThresholds] # log-transform
     #pThresholds = (0, 0.8, 0.9, 0.95, 1)
     #colors = ["black", "blue", "red", "violet"]
     pThresholds = (0, 0.8, 1)
-    colors = ["white", (0,1,0.05)]
+    colors = ["white", (0,1,0.05)] # for black bkgd
+    #colors = ["black", "blue"]  # for white bkgd
     plt.hlines(pThresholds[:-1], xlimits[0], xlimits[1], colors=colors)
 
     # for lin
@@ -500,71 +562,40 @@ def manhattanPlot(df, outPath, keyID=None):
 
     # no return
 
+### the heatmap routine is imported from a separate script!
 
-def key_alignment_columns(alignment, key_seqid):
-    '''return list of columns of an alignment that are not gaps in the key sequence'''
-    al_length = alignment.get_alignment_length()
-
-    # Get the key sequence
-    for seqrec in alignment:
-        if seqrec.id == key_seqid:
-            keyseq = seqrec.seq
-
-    mappedCols = [None] * len(str(keyseq).replace('-', ''))
-    keyindex = 0
-    for i in range(al_length):  # only iterate over columns that are not gaps in target seq
-        if keyseq[i] != "-":  # meaning anything except gaps
-            mappedCols[keyindex] = i + 1  # map the alignment column to the key column. Gotta shift the index!
-            keyindex += 1
-
-    # print >> sys.stderr, mappedCols #TEST
-    return mappedCols
-
-
-# Basic tree style
-tree_style = TreeStyle()
-tree_style.show_leaf_name = False
-tree_style.show_branch_length = False
-tree_style.draw_guiding_lines = True
-tree_style.complete_branch_lines_when_necessary = True
-
-# make tree grow upward
-tree_style.rotation = 270
-# and make it appear ultrametric (which it is!)
-tree_style.optimal_scale_level = "full"
-
-nstyle = NodeStyle()
-nstyle["fgcolor"] = "black"
-nstyle["size"] = 0
-
-nstyle_L = NodeStyle()
-nstyle["fgcolor"] = "black"
-nstyle["size"] = 0
-
+# Check treefile
 if not os.path.isfile(args.tree):
-    print ("%s does not exist" %args.tree)
+    print >> sys.stderr, "# ERROR: {} does not exist".format(args.tree)
     sys.exit(1)
 
+# Load treefile
 tree = init_tree(args.tree)
 # not mucking with additive trees yet; ultrametrize the tree and normalize to length 1
 tree.convert_to_ultrametric(tree_length=1)
 
-### Load in continuous trait data
 
 def main(wayout):
+
     if args.cont_trait_table is not None:
-        # Load in dict of traits keyed on species. Note hardcoding of 'sp' colname!
+
+        ### Generate convergent scenarios
+
+        # Load in dict of traits keyed on species. Note hardcoding of 'sp' colName!
         tipTraits = pd.read_table(args.cont_trait_table).set_index('sp').transpose().to_dict(orient='r')[0]
-
-        # Generate discrete trait matrix for all cutoff values
+        # Do BM trait reconstruction
         nodeTraits = ancR(tree, tipTraits)
-        traitMatrix = discretize(nodeTraits, args.precision)
-        traitMatrix = uniqueFilter(traitMatrix) # drop columns as needed to eliminate redundant scenarios
-        scenarios = scenarioStrings(traitMatrix.drop(traitMatrix.columns[0], axis=1), tree) # drop first column
-
-        #print scenarios #TEST
+        # Generate discrete trait matrix for all cutoff values
+        binDF = discretize(nodeTraits, args.precision)
+        # consolidate redundant scenarios
+        binDF = uniqueColumnFilter(binDF)[0] # element [1] is the chaff
+        # eliminate convergent root scenarios
+        binDF = convergentRootFilter(binDF)[0] # element [1] is the chaff
+        # convert binary dataframe into scenario strings
+        scenarios = scenarioStrings(binDF, tree)
 
         scenDir = args.output + "/scenarios"
+
         if args.test_trees or args.det:
 
             # make a dir for the test trees
@@ -574,44 +605,61 @@ def main(wayout):
             except:
                 pass
 
-            traitTree(nodeTraits, wavelength_to_rgb) # draw trait-colored tree
-            testTrees(scenarios, nodeTraits, wavelength_to_rgb) # draw test trees
+            print >> sys.stderr, "# MESSAGE: Drawing trees..."
+            # draw trait-colored tree
+            traitTree(nodeTraits, wavelength_to_rgb, testDir)
+            #traitTreeMinimal(nodeTraits, wavelength_to_rgb)  # draw trait-colored tree
+            # draw boring test trees that indicate convergent scenario with red/orange
+            testTrees(scenarios, testDir)
+            #testTreesMinimal(scenarios, nodeTraits, wavelength_to_rgb) # draw test trees with color-coded nodes
 
-        if args.det: # if in determine mode
-            threshold = 0.8 #test
+        # if in determine mode
+        if args.det:
+            # pcoc_det requires a threshold argument, but this script doesn't use the filtered results
+            # so this value doesn't matter
+            threshold = 0.8
             # make a dir for all that pcoc_det output
             try:
                 os.mkdir(scenDir)
             except:
                 pass
 
-            det_log = open(args.output + "/det.log", 'a')
-            det_log.write("continuous trait values:\n")
-            pprint(tipTraits, stream=det_log)  # Log the continuous trait values used
-            s = 1
-            for cutoff in sorted(scenarios.keys()):
-                try: det_log = open(args.output + "/det.log", 'a')
+            # open the pcoc_det logfile and tell user about it
+            print >> sys.stderr, "# MESSAGE: Opening site detection logfile:"
+            detLogPath = args.output + "/det_{}.log".format(startDateTime)
+            detLogHandle = open(detLogPath, 'a')
+            print >> sys.stderr, detLogPath
+
+            # log the continuous trait values used
+            detLogHandle.write("continuous trait values:\n")
+            pprint(tipTraits, stream=detLogHandle)
+
+            # run pcoc_det.py for each convergent scenario
+            print >> sys.stderr, "# MESSAGE: Detecting convergent sites for scenarios..."
+            for num, cutoff in enumerate(sorted(scenarios.keys())):
+                try: detLogHandle = open(detLogPath, 'a')
                 except: pass
+                detLogHandle.write("~~~ convergent scenario {}/{} ~~~\n".format(num+1, len(scenarios)))
+                detLogHandle.write("trait cutoff = {}\n".format(cutoff))
+                # if I don't reopen the file here, the above entries end up below the pcoc_det run. #TODO follow this up
+                detLogHandle.close()
+                detLogHandle = open(detLogPath, 'a')
                 detArgs = ["pcoc_det.py",
                            "-t", args.tree,
                            "-aa", args.aa_align,
                            "-o", scenDir + '/' + str(cutoff).replace('.','_'),
-                           # "-cpu " + str(cpus),
                            "-m", str(scenarios[cutoff]),
-                           "--plot_complete_ali",
-                           "--plot",
+                           #"--plot_complete_ali",
+                           #"--plot",
                            "-f", str(threshold)]
-                det_log.write("~~~ evolutionary scenario " + str(s) + "/" + str(len(scenarios)) + " ~~~\n")
-                det_log.write("trait cutoff = " + str(cutoff) + "\n")
-                sleep(0.05)
-                print str(s) + "/" + str(len(scenarios)) + ": " + str(cutoff)
-                subprocess.call(detArgs, stdout=det_log, stderr=det_log) # This will put the scenario string in the main logfile
-                det_log.close() # give the stream back to parent process (this one)
-                s = s+1
+                print >> sys.stderr, "{}/{}: {}".format(num+1, len(scenarios), cutoff)
+                subprocess.call(detArgs, stdout=detLogHandle, stderr=detLogHandle)
+                # give the stream back to parent process (this one)
+                detLogHandle.close()
 
-            det_log.close()
+            detLogHandle.close()
 
-        # all below is for data collation, visualization
+        ### Collate, visualize results
 
         if args.heatmap or args.master_table or args.manhattan:
             # get master dataframe of results for all cutoffs
@@ -619,7 +667,7 @@ def main(wayout):
             if args.key_seq: # map the PP scores to key sequence positions
                 alignment = AlignIO.read(args.aa_align, format="fasta")
                 # get key columns of the alignment
-                keyCols = key_alignment_columns(alignment, args.key_seq)
+                keyCols = keyAlignmentColumns(alignment, args.key_seq)
                 # filter the 2-column data table to contain only these sites
                 metaDf = metaDf[metaDf["Sites"].isin(keyCols)]
                 # reindex the sites
@@ -627,32 +675,37 @@ def main(wayout):
                 heatmapDf = metaDf.pivot(index="cutoff", columns="Sites", values="PCOC")
 
         if args.heatmap:
+            print >> sys.stderr, "# MESSAGE: Drawing heatmap:"
             # Make a heatmap figure. Graphics parameters are all set in `pcoc_cont_heatmap.py`
-            rainbow = False #Is the trait in question a visible wavelength to be plotted chromatically?
-            heatmapper.heatMapDF(heatmapDf, args.heatmap, rainbow=rainbow)
+            heatmapPath = args.output + '/' + args.heatmap
+            rainbow = True #Is the trait in question a visible wavelength to be plotted chromatically?
+            heatmapper.heatMapDF(heatmapDf, heatmapPath, rainbow=rainbow)
+            # tell user where it was put
+            print >> sys.stderr, heatmapPath
 
         if args.manhattan:
-            # Make a Manhattan plot
 
+            ### Sum columns of non-exclusive probabilities
             def sumProbs(probArray):
-                # sum columns of non-exclusive probabilities
                 # the array casting is important, because numpy uses the operators element-wise
                 sums = np.array([0.] * probArray.shape[1])
                 for row in probArray:
                     sums = sums + np.array(row) - (sums * np.array(row))
                 return sums
 
-            #manhattanDf = heatmapDf.sum(axis=0)
+            print >> sys.stderr, "# MESSAGE: Drawing Manhattan plot:"
             manhattanSeries = sumProbs(np.array(heatmapDf)) # convert to array
-            #print sumProbs(np.array(heatmapDf)[:,29:30])
-            #manhattanDf /= manhattanDf.max() #normalize
-            manhattanPlot(manhattanSeries, args.manhattan, args.key_seq)
+            manhattanPath = args.output + '/' + args.manhattan
+            manhattanPlot(manhattanSeries, manhattanPath, args.key_seq)
+            # tell user where it was put
+            print >> sys.stderr, manhattanPath
 
         if args.master_table:
+            print >> sys.stderr, "# MESSAGE: Saving master table of results:"
             # Print master data table. Note that it is transpose of the table sent to heatMapDF()
             metaDf.pivot(columns="cutoff", index="Sites", values="PCOC").to_csv(args.master_table, sep='\t')
-
-        #print(scenarios) #TEST
+            # tell user where it was put
+            print >> sys.stderr, args.master_table
 
 
 if __name__ == "__main__":

@@ -1,0 +1,18 @@
+alphabet=Protein
+
+input.tree.file=$(TREE)
+input.tree.format=Nhx
+
+nonhomogeneous = general
+#nonhomogeneous.number_of_models = 1
+
+#model1=LGL08_CAT_C$(Ne1)(nbCat=$(NBCAT))
+#model1.nodes_id=$(mod1Nodes)
+
+nonhomogeneous.root_freq=FromModel(model=LGL08_CAT_C$(Ne1)(nbCat=$(NBCAT)))
+
+#rate_distribution=Constant()
+rate_distribution=Gamma(n=4)
+
+### simulation
+output.sequence.file=$(FASTA_OUT)
