@@ -52,37 +52,41 @@ import pcoc_cont_heatmap as heatmapper
 ##########
 startDateTime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-### Option defining
-parser = argparse.ArgumentParser(prog="pcoc_num_tree.py", description='')
-parser.add_argument('--version', action='version', version='%(prog)s 1.0')
+if __name__ == "__main__":
+    
+    ### Option defining
+    parser = argparse.ArgumentParser(prog="pcoc_cont_scenarios.py", description='')
+    parser.add_argument('--version', action='version', version='%(prog)s 1.0')
 
-##############
-requiredOptions = parser.add_argument_group('Required arguments')
-requiredOptions.add_argument('-t', "--tree", type=str, help='input tree name', required=True)
-requiredOptions.add_argument('-o', '--output', type=str, help="Output directory", required=True)
-requiredOptions.add_argument('-c', '--cont_trait_table', type=str, help="trait table name")
-##############
-Options = parser.add_argument_group('Options')
-Options.add_argument('-aa', '--aa_align', type=str, help="AA alignment name")
-Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
-Options.add_argument('-tt', '--test_trees', action="store_true",
-                     help="Draw test trees to evaluate the discretization scheme")
-Options.add_argument('-i', '--invert_trait', action="store_true",
-                     help="Invert the binary trait, i.e. assert that low trait value is the convergent state")
-Options.add_argument('-d', '--det', action="store_true", help="Set to actually run pcoc_det.py")
-Options.add_argument('-f', '--float', type=int, default=None, help="Store trait cutoffs as floating-point values")
-Options.add_argument('-p', '--precision', type=float, default=0.0,
-                     help="Minimum difference in trait cutoffs between consecutive scenarios to be tested")
-Options.add_argument('-hm', '--heatmap', type=str,
-                     help="Render heatmap from the latest available set of data and save it here")
-Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
-#TODO: have master table go to stdout, but for some reason my stderr goes there too!
-Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot at...")
-##############
+    ##############
+    requiredOptions = parser.add_argument_group('Required arguments')
+    requiredOptions.add_argument('-t', "--tree", type=str, help='input tree name', required=True)
+    requiredOptions.add_argument('-o', '--output', type=str, help="Output directory", required=True)
+    requiredOptions.add_argument('-c', '--cont_trait_table', type=str, help="trait table name")
+    ##############
+    Options = parser.add_argument_group('Options')
+    Options.add_argument('-aa', '--aa_align', type=str, help="AA alignment name")
+    Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
+    Options.add_argument('-tt', '--test_trees', action="store_true",
+                         help="Draw test trees to evaluate the discretization scheme")
+    Options.add_argument('-i', '--invert_trait', action="store_true",
+                         help="Invert the binary trait, i.e. assert that low trait value is the convergent state")
+    Options.add_argument('-d', '--det', action="store_true", help="Set to actually run pcoc_det.py")
+    Options.add_argument('-f', '--float', type=int, default=None, help="Store trait cutoffs as floating-point values")
+    Options.add_argument('-p', '--precision', type=float, default=0.0,
+                         help="Minimum difference in trait cutoffs between consecutive scenarios to be tested")
+    Options.add_argument('-hm', '--heatmap', type=str,
+                         help="Render heatmap from the latest available set of data and save it here")
+    Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
+    #TODO: have master table go to stdout, but for some reason my stderr goes there too!
+    Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot at...")
+    ##############
 
-### Option parsing
-#global args
-args = parser.parse_args()
+    ### Option parsing
+    #global args
+    args = parser.parse_args()
+
+    main(sys.stdout)
 
 ### Number tree nodes for consistent reference
 def init_tree(nf):
@@ -706,7 +710,3 @@ def main(wayout):
             metaDf.pivot(columns="cutoff", index="Sites", values="PCOC").to_csv(args.master_table, sep='\t')
             # tell user where it was put
             print >> sys.stderr, args.master_table
-
-
-if __name__ == "__main__":
-        main(sys.stdout)
