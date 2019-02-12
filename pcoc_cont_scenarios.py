@@ -47,6 +47,7 @@ from Bio import AlignIO
 from wl2rgb import wavelength_to_rgb
 import pcoc_cont_heatmap as heatmapper
 
+
 ### Number tree nodes for consistent reference
 def init_tree(nf):
     t = Tree(nf)
@@ -55,6 +56,7 @@ def init_tree(nf):
         n.add_features(ND = i)
 
     return t
+
 
 ### Perform BM continuous-trait ancestral state reconstruction. Return list of trait values indexed on node #.
 def ancR(tree, tipTraits):
@@ -95,6 +97,7 @@ def ancR(tree, tipTraits):
         nodeId += 1
 
     return nodeTraits
+
 
 # take a list of node traits, bin them as specified, return both inter-bin cutoffs and bin means
 def binBy(nodeTraits, fixNumBins = 0, fixBinWidth = 0):
@@ -145,6 +148,7 @@ def binBy(nodeTraits, fixNumBins = 0, fixBinWidth = 0):
 
     return cutoffs, nodeTraits
 
+
 # Take a list of node traits and return a boolean DataFrame with all possible discretizations of the list.
 # DF headers are the discretization cutoffs.
 def discretize(nodeTraits, cutoffs, invert = False):
@@ -176,6 +180,7 @@ def discretize(nodeTraits, cutoffs, invert = False):
         binDF = binDF.astype(bool)
 
     return binDF
+
 
 # Take a discrete trait DataFrame, consolidate indentical columns and average the headers (which should be floats)
 def uniqueScenarios(binDF):
@@ -215,118 +220,6 @@ def uniqueScenarios(binDF):
         print >> sys.stderr, "# MESSAGE: Scenarios for all cutoffs are unique"
 
     return binDF
-
-### Iteratively discretize continuous trait into binary matrix
-def discretizeOld(nodeTraits, precision, floatSwitch, invert_trait):
-
-    binDF = pd.DataFrame()
-
-    nodeTraitsUnique = np.unique(nodeTraits) # returns sorted unique vals
-
-    # split the trait range into bins that are at least `precision` units apart
-    cutoffs = list()
-    numPossibleCutoffs = len(nodeTraitsUnique) - 1
-    for i in range(0, numPossibleCutoffs):
-        # if the trait values are far enough apart
-        if nodeTraitsUnique[i+1] - nodeTraitsUnique[i] >= precision:
-            # place a cutoff smack in between those values
-            cutoffs.append((nodeTraitsUnique[i]+nodeTraitsUnique[i+1])/2)
-
-    #print >> sys.stderr, "Used precision of " + str(precision) + " trait units to choose " + str(len(cutoffs)) + "/" + str(numPossibleCutoffs) + " possible cutoffs"
-    print >> sys.stderr, "# MESSAGE: Used precision of {} trait units to choose {}/{} possible cutoffs".format(precision, len(cutoffs), numPossibleCutoffs)
-
-    # put traits into DF col 0
-    binDF["trait_cont"] = nodeTraits
-
-    for cutoff in np.unique(cutoffs):
-        if not floatSwitch: # round the cutoff to int
-            opColumn = "trait_cutoff_" + str(round(cutoff))
-        else: # keep it floating
-            opColumn = "trait_cutoff_" + str(cutoff)
-        binDF[opColumn] = pd.cut(binDF["trait_cont"], [min(nodeTraits)]+[cutoff]+[max(nodeTraits)], include_lowest=True, labels=False)
-
-    # drop the first column, which contains continuous trait values
-    binDF = binDF.drop(binDF.columns[0], axis=1)
-
-    # convert binary values to Boolean
-    if invert_trait:
-        # invert the trait if specified
-        binDF = ~binDF.astype(bool)
-    else:
-        # otherwise high trait value is considered the convergent state
-        binDF = binDF.astype(bool)
-
-    return binDF
-
-### Consolidate identical scenarios under their average header value
-### This filter is topology-agnostic, so works on the binary trait matrix only
-def uniqueColumnFilterOld(binDF):
-
-    chaff = pd.DataFrame() # init DF for dropped columns
-    origNumScenarios = binDF.shape[1]
-    keyIndex = 0
-
-    while keyIndex < len(binDF.columns): # need a while loop because this routine is recursive
-        keyColName = list(binDF)[keyIndex]
-        # if there is a numeric trait value in the colName
-        if len(findall( r'\d+\.*\d*', keyColName)) != 0:
-            # init a list of names of columns to be consolidated
-            averageMe = [float(findall( r'\d+\.*\d*', keyColName)[0])]
-            keyCol = binDF[keyColName] # this is the column that others will be compared to
-            # iterate through the remaining columns
-            for colName in list(binDF)[keyIndex+1:]:
-                col = binDF[colName]
-                # if one matches the key column
-                if col is keyCol:
-                    # add its cutoff to the list to be averaged
-                    averageMe.append(float(findall( r'\d+\.*\d*', colName)[0]))
-                    # and put it in the chaff DF
-                    chaff[colName] = binDF[colName]
-            # once all duplicates are dropped, rename the key column with the mean cutoff of all the duplicates
-            binDF = binDF.rename(index=str, columns={str(keyColName) : "trait_cutoff_"+str(np.mean(averageMe))})
-        keyIndex += 1
-
-    numRedundant = chaff.shape[1]
-    chaffCutoffs = [float(findall(r'\d+\.*\d*', colName)[0]) for colName in chaff.columns]
-
-    # if any scenarios were non-unique
-    if numRedundant:
-        # list them
-        print >> sys.stderr, "# MESSAGE: {}/{} scenarios were redundant:".format(numRedundant, origNumScenarios)
-        print >> sys.stderr, "{}".format(chaffCutoffs)
-
-    return binDF, chaff
-
-### Remove and report on scenarios in which the root is called convergent
-### root status is deduced from the row names, which are post-order node IDs
-def convergentRootFilterOld(binDF):
-
-    chaff = pd.DataFrame() # init DF for dropped columns
-    origNumScenarios = binDF.shape[1]
-
-    for colNum, colName in enumerate(binDF.columns):
-        for node, state in enumerate(binDF[colName]):
-            # if node is convergent AND also the root
-            if state & (node == binDF.shape[0] - 1):
-                # put it in the chaff DF
-                #print binDF[colName] #TEST
-                chaff[colName] = binDF[colName]
-                # and drop it from the matrix
-                binDF.drop(colName, inplace=True, axis=1) # Not sure whether drop() can take a whole column or needs a colname!!
-
-    # notify user of outcome of root filter
-    numRootConv = chaff.shape[1]
-    chaffCutoffs = [float(findall( r'\d+\.*\d*', colName)[0]) for colName in chaff.columns]
-
-    print >> sys.stderr, "# MESSAGE: {}/{} scenarios eliminated due to convergent root:".format(numRootConv, origNumScenarios)
-    print >> sys.stderr, "{}".format(chaffCutoffs)
-
-    if numRootConv >= origNumScenarios / 2:
-        print >> sys.stderr, "# WARNING: Consider inverting your trait!"
-
-    #print binDF #TEST
-
-    return binDF, chaff
 
 
 ### Remove and report on scenarios in which the root is called convergent
