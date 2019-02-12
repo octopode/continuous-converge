@@ -128,8 +128,8 @@ def binBy(nodeTraits, fixNumBins = 0, fixBinWidth = 0):
         activeBins = sorted(list(set(bIndices)))
         print >> sys.stderr, "# MESSAGE: Use of bins {} trait units wide yielded {} unique trait values:".format(fixBinWidth, len(activeBins))
 
-    if fixNumBins or fixBinWidth:
     # now, bin the values and average them
+    if fixNumBins or fixBinWidth:
         toAverage = [list()] * numBins
         for bin, val in zip(bIndices, nodeTraits):
             toAverage[bin] = toAverage[bin] + [val]
@@ -145,6 +145,10 @@ def binBy(nodeTraits, fixNumBins = 0, fixBinWidth = 0):
         # report on binning operation
         for avg, init in zip(nodeTraits, toAverage):
             print >> sys.stderr, "# {} <- {}".format(avg, init)
+    # if no binning was specified, place cutoffs between unique trait values
+    else:
+        nodeTraits = np.unique(nodeTraits)
+        cutoffs = [np.mean((nodeTraits[i], nodeTraits[i+1])) for i in range(len(nodeTraits)-1)]
 
     return cutoffs, nodeTraits
 
@@ -196,7 +200,7 @@ def uniqueScenarios(binDF):
         # group the headers matching each unique column in a list of lists
         toAverage = [list()] * len(uniqueCols)
         for i, col in enumerate(uniqueCols):
-            for colName, series in binDF.iteritems():
+            for colName, series in sorted(list(binDF.iteritems())):
                 if tuple(series) == col:
                     # append-in-place no good here
                     toAverage[i] = toAverage[i] + [colName]
