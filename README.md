@@ -78,7 +78,7 @@ cd continuous-converge/
 # launch Docker container with $pwd mounted as /data/
 docker run --mount type=bind,source="$(pwd)",target=/data/ -it pcoc-matplot /bin/bash
 # run pcoc_cont_scenarios.py on your data. For the example dataset inside the repo:
-xvfb-run python2 /data/pcoc_cont_scenarios.py -t data/example/FPs_data/tree/RAxML_bipartitions.FPs_62genes_MAFFT-gblocks-raxML-ultram.tree -o data/example/results -c data/example/FPs_data/trait/FPemWL_62genes_noref.tab -aa data/example/FPs_data/seq/FPs_62genes_MAFFT.fasta -p 2 -d -k _Avictoria -m master-table_2nm.tab -hm heatmap_2nm.pdf -mp manhattan_2nm.pdf
+xvfb-run python2 /data/pcoc_cont_scenarios.py -t data/example/FPs_data/tree/RAxML_bipartitions.FPs_62genes_MAFFT-gblocks-raxML-ultram.tree -o data/example/results -c data/example/FPs_data/trait/FPemWL_62genes_noref.tab -aa data/example/FPs_data/seq/FPs_62genes_MAFFT.fasta -bw 5.0 -f 2 -d -k _Avictoria -m master-table_2nm.tab -hm heatmap_2nm.pdf -mp manhattan_2nm.pdf
 # ^xvfb-run is needed for graphics functionality in Docker
 ```
 

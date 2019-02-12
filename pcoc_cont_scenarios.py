@@ -47,60 +47,20 @@ from Bio import AlignIO
 from wl2rgb import wavelength_to_rgb
 import pcoc_cont_heatmap as heatmapper
 
-##########
-# inputs #
-##########
-startDateTime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
-if __name__ == "__main__":
-    
-    ### Option defining
-    parser = argparse.ArgumentParser(prog="pcoc_cont_scenarios.py", description='')
-    parser.add_argument('--version', action='version', version='%(prog)s 1.0')
-
-    ##############
-    requiredOptions = parser.add_argument_group('Required arguments')
-    requiredOptions.add_argument('-t', "--tree", type=str, help='input tree name', required=True)
-    requiredOptions.add_argument('-o', '--output', type=str, help="Output directory", required=True)
-    requiredOptions.add_argument('-c', '--cont_trait_table', type=str, help="trait table name")
-    ##############
-    Options = parser.add_argument_group('Options')
-    Options.add_argument('-aa', '--aa_align', type=str, help="AA alignment name")
-    Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
-    Options.add_argument('-tt', '--test_trees', action="store_true",
-                         help="Draw test trees to evaluate the discretization scheme")
-    Options.add_argument('-i', '--invert_trait', action="store_true",
-                         help="Invert the binary trait, i.e. assert that low trait value is the convergent state")
-    Options.add_argument('-d', '--det', action="store_true", help="Set to actually run pcoc_det.py")
-    Options.add_argument('-f', '--float', type=int, default=None, help="Store trait cutoffs as floating-point values")
-    Options.add_argument('-p', '--precision', type=float, default=0.0,
-                         help="Minimum difference in trait cutoffs between consecutive scenarios to be tested")
-    Options.add_argument('-hm', '--heatmap', type=str,
-                         help="Render heatmap from the latest available set of data and save it here")
-    Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
-    #TODO: have master table go to stdout, but for some reason my stderr goes there too!
-    Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot at...")
-    ##############
-
-    ### Option parsing
-    #global args
-    args = parser.parse_args()
-
-    main(sys.stdout)
-
 ### Number tree nodes for consistent reference
 def init_tree(nf):
     t = Tree(nf)
 
-    nodeId = 0
-    for n in t.traverse("postorder"):
-        n.add_features(ND=nodeId)
-        nodeId = nodeId + 1
+    for i, n in enumerate(t.traverse("postorder")):
+        n.add_features(ND = i)
 
     return t
 
 ### Perform BM continuous-trait ancestral state reconstruction. Return list of trait values indexed on node #.
 def ancR(tree, tipTraits):
+
+    # this command does something funky to the branch lengths!
+    #tree.convert_to_ultrametric(tree_length=1)
 
     # Check that the trait list has values for all leaves
     dataError = False
@@ -118,28 +78,146 @@ def ancR(tree, tipTraits):
     for node in tree.traverse("postorder"): # Amend this to use enumerate()
 
         if node.name in tipTraits.keys(): # if the node is a tip or its state is specified
-            fixTrait = float(tipTraits[node.name])
+            fixTrait = tipTraits[node.name]
             node.add_features(trait = fixTrait)
             nodeTraits[nodeId] = fixTrait
 
         else: # if the state needs to be reconstructed
-            #TODO: break out interpolation function. I guess this will require passing the tree by reference?
-
-            weightTraits = dict()
-            totalDistance = tree.get_distance(*node.get_descendants()[:2])
-            for daughter in node.get_descendants()[:2]:
-                weightTraits[daughter.ND] = daughter.trait*(1-(daughter.get_distance(node)/totalDistance))
-            recTrait = sum(weightTraits.values())
+            daughters = node.get_descendants()[:2]
+            daughterTimes = [tree.get_distance(node, daughter) for daughter in daughters]
+            daughterTraits = [daughter.trait for daughter in daughters]
+            rate = (daughterTraits[1] - daughterTraits[0]) / sum(daughterTimes)
+            recTrait = daughterTraits[0] + (rate * daughterTimes[0])
 
             node.add_features(trait = recTrait)
             nodeTraits[nodeId] = recTrait
 
-        nodeId = nodeId + 1
+        nodeId += 1
 
     return nodeTraits
 
+# take a list of node traits, bin them as specified, return both inter-bin cutoffs and bin means
+def binBy(nodeTraits, fixNumBins = 0, fixBinWidth = 0):
+    #TODO: implement unbiased rounding for np.digitize()
+
+    # can only specify number of bins OR bin width
+    if fixNumBins and fixBinWidth:
+        sys.exit(1)
+
+    # with specified number of bins
+    if fixNumBins:
+        numBins = fixNumBins
+        binWidth = float(max(nodeTraits) - min(nodeTraits)) / fixNumBins
+        binBounds = [min(nodeTraits) + (binWidth * i) for i in range(fixNumBins + 1)]
+        binBounds[-1] *= 1.001 # include the right boundary
+        bIndices = [i-1 for i in np.digitize(nodeTraits, binBounds)]
+        activeBins = sorted(list(set(bIndices)))
+        print >> sys.stderr, "# MESSAGE: Use of {} equal-width bins yielded {} unique trait values:".format(fixNumBins, len(activeBins))
+
+    # with specified bin width, centered on midpoint of range
+    if fixBinWidth:
+        numBins = int((max(nodeTraits) - min(nodeTraits)) / fixBinWidth) + 1
+        midpoint = float(max(nodeTraits) + min(nodeTraits)) / 2.0
+        start = midpoint - (float(fixBinWidth) * numBins / 2.0)
+        binBounds = [start + (fixBinWidth * i) for i in range(numBins + 1)]
+        binBounds[-1] *= 1.001  # include the right boundary
+        bIndices = [i-1 for i in np.digitize(nodeTraits, binBounds)]
+        activeBins = sorted(list(set(bIndices)))
+        print >> sys.stderr, "# MESSAGE: Use of bins {} trait units wide yielded {} unique trait values:".format(fixBinWidth, len(activeBins))
+
+    if fixNumBins or fixBinWidth:
+    # now, bin the values and average them
+        toAverage = [list()] * numBins
+        for bin, val in zip(bIndices, nodeTraits):
+            toAverage[bin] = toAverage[bin] + [val]
+        # only keep the bins with stuff in them
+        toAverage = [bin for bin in toAverage if bin]
+
+        # place cutoffs in between the bin boundaries
+        cutoffs = [np.mean((max(toAverage[i]), min(toAverage[i + 1]))) for i in range(len(toAverage) - 1)]
+
+        # write bin means
+        nodeTraits = [np.mean(bin) for bin in toAverage]
+
+        # report on binning operation
+        for avg, init in zip(nodeTraits, toAverage):
+            print >> sys.stderr, "# {} <- {}".format(avg, init)
+
+    return cutoffs, nodeTraits
+
+# Take a list of node traits and return a boolean DataFrame with all possible discretizations of the list.
+# DF headers are the discretization cutoffs.
+def discretize(nodeTraits, cutoffs, invert = False):
+
+    # get unique node trait values and sort ascending
+    uniqueNodeTraits = sorted(np.unique(nodeTraits))
+
+    # get all possible cutoffs
+    #cutoffs = [np.mean((uniqueNodeTraits[i], uniqueNodeTraits[i+1])) for i in range(len(uniqueNodeTraits)-1)]
+
+    # init pd.DataFrame
+    binDF = pd.DataFrame()
+    # put continuous values into the first column. Rows are nodes in post-order.
+    binDF["trait_cont"] = nodeTraits
+
+    # append binary columns to DataFrame
+    for cutoff in cutoffs:
+        binDF[cutoff] = pd.cut(binDF["trait_cont"], [min(nodeTraits)]+[cutoff]+[max(nodeTraits)],
+                                    include_lowest=True, labels=False)
+    # then drop the first column
+    binDF = binDF.drop(binDF.columns[0], axis=1)
+
+    # convert binary values to Boolean
+    if invert:
+        # invert the trait if specified
+        binDF = ~binDF.astype(bool)
+    else:
+        # otherwise high trait value is considered the convergent state
+        binDF = binDF.astype(bool)
+
+    return binDF
+
+# Take a discrete trait DataFrame, consolidate indentical columns and average the headers (which should be floats)
+def uniqueScenarios(binDF):
+
+    # make a set of (unique) column tuples
+    uniqueCols = list(set([tuple(binDF[column]) for column in binDF.columns]))
+
+    numInitCols = len(binDF.columns)
+    numUniqueCols = len(uniqueCols)
+
+    if numUniqueCols < numInitCols:
+
+        # group the headers matching each unique column in a list of lists
+        toAverage = [list()] * len(uniqueCols)
+        for i, col in enumerate(uniqueCols):
+            for colName, series in binDF.iteritems():
+                if tuple(series) == col:
+                    # append-in-place no good here
+                    toAverage[i] = toAverage[i] + [colName]
+
+        # average each list in the list of lists
+        avgCutoffs = [np.mean(cuts) for cuts in toAverage]
+
+        # list them
+        print >> sys.stderr, "# MESSAGE: {} scenarios were consolidated into {} unique scenarios:".format(numInitCols,
+                                                                                                          numUniqueCols)
+        for avg, init in zip(avgCutoffs, toAverage):
+            print >> sys.stderr, "# {} <- {}".format(avg, init)
+
+        # construct consolidated dataframe
+        binDF = pd.DataFrame(columns = avgCutoffs, data = zip(*uniqueCols))
+        # sort the new averaged columns
+        binDF.sort_index(axis = 1, inplace = True)
+
+    else:
+
+        print >> sys.stderr, "# MESSAGE: Scenarios for all cutoffs are unique"
+
+    return binDF
+
 ### Iteratively discretize continuous trait into binary matrix
-def discretize(nodeTraits, precision):
+def discretizeOld(nodeTraits, precision, floatSwitch, invert_trait):
 
     binDF = pd.DataFrame()
 
@@ -161,8 +239,8 @@ def discretize(nodeTraits, precision):
     binDF["trait_cont"] = nodeTraits
 
     for cutoff in np.unique(cutoffs):
-        if not args.float: # round the cutoff to int
-            opColumn = "trait_cutoff_" + str(int(cutoff))
+        if not floatSwitch: # round the cutoff to int
+            opColumn = "trait_cutoff_" + str(round(cutoff))
         else: # keep it floating
             opColumn = "trait_cutoff_" + str(cutoff)
         binDF[opColumn] = pd.cut(binDF["trait_cont"], [min(nodeTraits)]+[cutoff]+[max(nodeTraits)], include_lowest=True, labels=False)
@@ -171,7 +249,7 @@ def discretize(nodeTraits, precision):
     binDF = binDF.drop(binDF.columns[0], axis=1)
 
     # convert binary values to Boolean
-    if args.invert_trait:
+    if invert_trait:
         # invert the trait if specified
         binDF = ~binDF.astype(bool)
     else:
@@ -182,7 +260,7 @@ def discretize(nodeTraits, precision):
 
 ### Consolidate identical scenarios under their average header value
 ### This filter is topology-agnostic, so works on the binary trait matrix only
-def uniqueColumnFilter(binDF):
+def uniqueColumnFilterOld(binDF):
 
     chaff = pd.DataFrame() # init DF for dropped columns
     origNumScenarios = binDF.shape[1]
@@ -221,7 +299,7 @@ def uniqueColumnFilter(binDF):
 
 ### Remove and report on scenarios in which the root is called convergent
 ### root status is deduced from the row names, which are post-order node IDs
-def convergentRootFilter(binDF):
+def convergentRootFilterOld(binDF):
 
     chaff = pd.DataFrame() # init DF for dropped columns
     origNumScenarios = binDF.shape[1]
@@ -250,6 +328,27 @@ def convergentRootFilter(binDF):
 
     return binDF, chaff
 
+
+### Remove and report on scenarios in which the root is called convergent
+def convergentRootFilter(binDF):
+
+    # store the original columns
+    origCutoffs = binDF.columns
+    # get the columns whose last (root) element is True
+    convergentCutoffs = [colName for colName in origCutoffs if binDF[colName].iloc[-1]]
+    # drop those columns
+    binDF.drop(labels = convergentCutoffs, axis = 1, inplace = True)
+
+    # notify user of outcome of root filter
+    print >> sys.stderr, "# MESSAGE: {}/{} scenarios eliminated due to convergent root:".format(len(convergentCutoffs), len(origCutoffs))
+    print >> sys.stderr, "{}".format(convergentCutoffs)
+
+    if len(convergentCutoffs) >= len(origCutoffs) / 2:
+        print >> sys.stderr, "# WARNING: Consider inverting your trait!"
+
+    return binDF
+
+
 ### Use tree and binary trait matrix to generate 'convergent scenario' strings readable by PCOC scripts
 def scenarioStrings(binDF, tree):
 
@@ -260,23 +359,28 @@ def scenarioStrings(binDF, tree):
         scenario = str()
         for node, state in enumerate(binDF[col]):
             # if convergent state is true
-            if state & (node < binDF.shape[0] - 1):
-                parentND = tree.search_nodes(ND=node)[0].up.ND
-                if binDF[col][parentND]:
-                    scenario = ',' + str(node) + scenario
+            if state:
+                # if not the root node
+                if (node < binDF.shape[0] - 1):
+                    parentND = tree.search_nodes(ND=node)[0].up.ND
+                    if binDF[col][parentND]:
+                        scenario = ',' + str(node) + scenario
+                    else:
+                        scenario = '/' + str(node) + scenario
                 else:
                     scenario = '/' + str(node) + scenario
 
         # remove leading '/' and add scenario to dict, keyed on cutoff
-        scenarios[float(findall(r'\d+\.*\d*', col)[0])] = scenario[1:]
+        scenarios[col] = scenario[1:]
 
     return scenarios
 
+
 ### Gather up *all* the output files in ScenDir and put them into a master dataframe
-def consolidatePCOCOutput(scenarios, scenDir):
+def consolidatePCOCOutput(scenarios, scenDir, aa_align):
 
     metaDf = pd.DataFrame()
-    propTable = os.path.splitext(os.path.basename(args.aa_align))[:-1][
+    propTable = os.path.splitext(os.path.basename(aa_align))[:-1][
                     0] + ".results.tsv"  # get the output file from the latest run
 
     for cutoff in sorted(scenarios.keys()):
@@ -337,7 +441,7 @@ nstyle["fgcolor"] = "black"
 nstyle["size"] = 0
 
 ### Draw a tree with nodes color-coded and labeled by trait value
-def traitTree(traits, mapper, outDir):
+def traitTree(tree, traits, mapper, outDir, float=0):
     ### Take dict of traits and [R,G,B]-returning function
     ### Draw a tree with the continuous trait painted on via a colormapping function
 
@@ -352,7 +456,10 @@ def traitTree(traits, mapper, outDir):
         else:
             n.set_style(nstyle)
         #nd = TextFace(str(n.ND)) # label with node ID
-        nd = TextFace(str(int(traits[n.ND]))) # label with rounded continuous trait value
+        if round == 0:
+            nd = TextFace(str(round(traits[n.ND]))) # label with rounded continuous trait value
+        else:
+            nd = TextFace(str(round(traits[n.ND], float)))  # label with rounded continuous trait value
 
         nd.background.color = rgb2hex(*[int(val) for val in mapper(traits[n.ND], gamma=0.8, scaleMax=255)]) # setup for wl2RGB
         nd.margin_right = 2
@@ -363,14 +470,13 @@ def traitTree(traits, mapper, outDir):
         n.add_face(nd, column=0, position="float")
         n.add_face(TextFace("       "), column=0, position="branch-bottom")
 
-    #outFile = args.output + "/test_trees/cont_trait.pdf"
     outFile = outDir + "/cont_trait.pdf"
     tree.render(outFile, tree_style=tree_style)
     print >> sys.stderr, outFile
     # no return
 
 ### Draw a tree with grey branches and black nodes
-def traitTreeMinimal(traits, mapper):
+def traitTreeMinimal(tree, traits, mapper, output):
     ### Take dict of traits and [R,G,B]-returning function
     ### Draw a tree with the continuous trait painted on via a colormapping function
     def rgb2hex(r, g, b):
@@ -398,17 +504,17 @@ def traitTreeMinimal(traits, mapper):
         n.set_style(nstyle)
         n.add_face(nf, column=0, position='branch-top')
 
-    outFile = args.output + "/test_trees/cont_trait.pdf"
+    outFile = output + "/test_trees/cont_trait.pdf"
     tree.render(outFile, tree_style=ts)
     print >> sys.stderr, outFile
     # no return
 
 ### Draw test trees in the standard visual style used by pcoc_num_tree.py
-def testTrees(scenarios, outDir):
+def testTrees(tree, scenarios, outDir, treePath, floatSwitch=0):
 
     ### Draw test trees. This is a modified version of the test routine in pcoc_num_tree.py, stuffed in a for loop
     for cutoff in sorted(scenarios.keys()):
-        tree = init_tree(args.tree)
+        tree = init_tree(treePath)
         # not mucking with additive trees yet; ultrametrize the tree and normalize to length 1
         tree.convert_to_ultrametric(tree_length=1)
         manual_mode_nodes = {}
@@ -445,11 +551,7 @@ def testTrees(scenarios, outDir):
             n.add_face(nd, column=0, position="float")
             n.add_face(TextFace("       "), column=0, position="branch-bottom")
 
-        # if --float set, limit number of digits in filename
-        if args.float:
-            outFile = str(cutoff).replace('.','_')[:np.min([args.float, len(str(cutoff))])] + ".pdf"
-        else:
-            outFile = str(cutoff).replace('.', '_') + ".pdf"
+        outFile = str(round(cutoff, floatSwitch)).replace('.','_') + ".pdf"
 
         # prepend path to filename
         outFile = outDir + '/' + outFile
@@ -458,7 +560,7 @@ def testTrees(scenarios, outDir):
         # no return
 
 ### draw color-coded test trees with node convergent status indicated by colored box
-def testTreesMinimal(scenarios, traits, mapper):
+def testTreesMinimal(tree, scenarios, traits, mapper, treePath, output, floatSwitch = 0):
 
     def rgb2hex(r, g, b):
         hex = "#{:02x}{:02x}{:02x}".format(r, g, b)
@@ -466,7 +568,7 @@ def testTreesMinimal(scenarios, traits, mapper):
 
     ### Draw test trees. This is a modified version of the test routine in pcoc_num_tree.py, stuffed in a for loop
     for cutoff in sorted(scenarios.keys()):
-        tree = init_tree(args.tree)
+        tree = init_tree(treePath)
         # not mucking with additive trees yet; ultrametrize the tree and normalize to length 1
         tree.convert_to_ultrametric(tree_length=1)
 
@@ -520,7 +622,7 @@ def testTreesMinimal(scenarios, traits, mapper):
                 n.add_face(nf, column=0, position='branch-top')
 
         # limiting number of digits
-        outFile = args.output + "/test_trees/" + str(cutoff).replace('.','_')[:np.min([5, len(str(cutoff))])] + ".pdf"
+        outFile = output + "/test_trees/" + str(round(cutoff, floatSwitch)).replace('.','_') + ".pdf"
         tree.render(outFile, tree_style=ts)
         print >> sys.stderr, outFile
         # no return
@@ -568,19 +670,58 @@ def manhattanPlot(df, outPath, keyID=None):
 
 ### the heatmap routine is imported from a separate script!
 
-# Check treefile
-if not os.path.isfile(args.tree):
-    print >> sys.stderr, "# ERROR: {} does not exist".format(args.tree)
-    sys.exit(1)
-
-# Load treefile
-tree = init_tree(args.tree)
-# not mucking with additive trees yet; ultrametrize the tree and normalize to length 1
-tree.convert_to_ultrametric(tree_length=1)
-
 
 def main(wayout):
 
+    ##########
+    # inputs #
+    ##########
+    startDateTime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    ### Option defining
+    parser = argparse.ArgumentParser(prog="pcoc_cont_scenarios.py", description='')
+    parser.add_argument('--version', action='version', version='%(prog)s 1.0')
+
+    ##############
+    requiredOptions = parser.add_argument_group('Required arguments')
+    requiredOptions.add_argument('-t', "--tree", type=str, help='input tree name', required=True)
+    requiredOptions.add_argument('-o', '--output', type=str, help="Output directory", required=True)
+    requiredOptions.add_argument('-c', '--cont_trait_table', type=str, help="trait table name", required=True)
+    ##############
+    Options = parser.add_argument_group('Options')
+    Options.add_argument('-aa', '--aa_align', type=str, help="AA alignment name")
+    Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
+    Options.add_argument('-tt', '--test_trees', action="store_true",
+                         help="Draw test trees to evaluate the discretization scheme")
+    Options.add_argument('-i', '--invert_trait', action="store_true",
+                         help="Invert the binary trait, i.e. assert that low trait value is the convergent state")
+    Options.add_argument('-d', '--det', action="store_true", help="Set to actually run pcoc_det.py")
+    Options.add_argument('-f', '--float', type=int, default=0, help="Round traits to f decimals in filenames and figures")
+    Options.add_argument('-nb', '--num_bins', type=int, default=0, help="Average continuous trait into n equal-width bins, 0 = no binning")
+    Options.add_argument('-bw', '--bin_width', type=float, default=0, help="Average continuous trait into bins of width w, 0 = no binning")
+    #Options.add_argument('-p', '--precision', type=float, default=0.0,
+    #                     help="Minimum difference in trait cutoffs between consecutive scenarios to be tested")
+    Options.add_argument('-hm', '--heatmap', type=str,
+                         help="Render heatmap from the latest available set of data and save it here")
+    Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
+    # TODO: have master table go to stdout, but for some reason my stderr goes there too!
+    Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot at...")
+    ##############
+
+    ### Option parsing
+    # global args
+    args = parser.parse_args()
+    
+    # Check treefile
+    if not os.path.isfile(args.tree):
+        print >> sys.stderr, "# ERROR: {} does not exist".format(args.tree)
+        sys.exit(1)
+    
+    # Load treefile
+    tree = init_tree(args.tree)
+    # not mucking with additive trees yet; ultrametrize the tree and normalize to length 1
+    tree.convert_to_ultrametric(tree_length=1)
+    
     if args.cont_trait_table is not None:
 
         ### Generate convergent scenarios
@@ -589,12 +730,16 @@ def main(wayout):
         tipTraits = pd.read_table(args.cont_trait_table).set_index('sp').transpose().to_dict(orient='r')[0]
         # Do BM trait reconstruction
         nodeTraits = ancR(tree, tipTraits)
+        # get cutoffs using specified binning
+        cutoffs = binBy(nodeTraits, fixNumBins = args.num_bins, fixBinWidth = args.bin_width)[0]
         # Generate discrete trait matrix for all cutoff values
-        binDF = discretize(nodeTraits, args.precision)
+        binDF = discretize(nodeTraits, cutoffs, args.invert_trait)
         # consolidate redundant scenarios
-        binDF = uniqueColumnFilter(binDF)[0] # element [1] is the chaff
+        #binDF = uniqueColumnFilter(binDF)[0] # element [1] is the chaff
+        binDF = uniqueScenarios(binDF)
         # eliminate convergent root scenarios
-        binDF = convergentRootFilter(binDF)[0] # element [1] is the chaff
+        #binDF = convergentRootFilter(binDF)[0] # element [1] is the chaff
+        binDF = convergentRootFilter(binDF)
         # convert binary dataframe into scenario strings
         scenarios = scenarioStrings(binDF, tree)
 
@@ -611,11 +756,11 @@ def main(wayout):
 
             print >> sys.stderr, "# MESSAGE: Drawing trees..."
             # draw trait-colored tree
-            traitTree(nodeTraits, wavelength_to_rgb, testDir)
-            #traitTreeMinimal(nodeTraits, wavelength_to_rgb)  # draw trait-colored tree
+            traitTree(tree, nodeTraits, wavelength_to_rgb, testDir)
+            #traitTreeMinimal(tree, nodeTraits, wavelength_to_rgb, args.output)  # draw trait-colored tree
             # draw boring test trees that indicate convergent scenario with red/orange
-            testTrees(scenarios, testDir)
-            #testTreesMinimal(scenarios, nodeTraits, wavelength_to_rgb) # draw test trees with color-coded nodes
+            testTrees(tree, scenarios, testDir, args.tree, args.float)
+            #testTreesMinimal(tree, scenarios, nodeTraits, wavelength_to_rgb, args.tree, args.output) # draw test trees with color-coded nodes
 
         # if in determine mode
         if args.det:
@@ -667,7 +812,7 @@ def main(wayout):
 
         if args.heatmap or args.master_table or args.manhattan:
             # get master dataframe of results for all cutoffs
-            metaDf = consolidatePCOCOutput(scenarios, scenDir)
+            metaDf = consolidatePCOCOutput(scenarios, scenDir, args.aa_align)
             if args.key_seq: # map the PP scores to key sequence positions
                 alignment = AlignIO.read(args.aa_align, format="fasta")
                 # get key columns of the alignment
@@ -710,3 +855,6 @@ def main(wayout):
             metaDf.pivot(columns="cutoff", index="Sites", values="PCOC").to_csv(args.master_table, sep='\t')
             # tell user where it was put
             print >> sys.stderr, args.master_table
+
+if __name__ == "__main__":
+    main(sys.stdout)
