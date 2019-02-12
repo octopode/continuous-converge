@@ -1,0 +1,26 @@
+alphabet=Protein
+
+input.tree.file=$(TREE)
+input.tree.format=Nhx
+
+nonhomogeneous = general
+#nonhomogeneous.number_of_models = 3
+
+#model1=LGL08_CAT_C$(Ne1)(nbCat=$(NBCAT))
+#model1.nodes_id=$(mod1Nodes)
+
+### transition branches
+#model2=OneChange(model=LGL08_CAT_C$(Ne2)(nbCat=$(NBCAT)))
+#model2.nodes_id=$(mod2Nodes)
+
+### under those branches
+#model3=LGL08_CAT_C$(Ne2)(nbCat=$(NBCAT))
+#model3.nodes_id=$(mod3Nodes)
+
+nonhomogeneous.root_freq=FromModel(model=LGL08_CAT_C$(Ne1)(nbCat=$(NBCAT)))
+
+#rate_distribution=Constant()
+rate_distribution=Gamma(n=4)
+
+### simulation
+output.sequence.file=$(FASTA_OUT)
