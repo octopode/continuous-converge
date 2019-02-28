@@ -1,9 +1,0 @@
-2019-02-19 00:51:26,119 - pcoc.ontinuous - DEBUG - ['data/pcoc_cont_scenarios.py', '-t', 'data/test_files/ABCDEFGH.tree', '-o', 'data/test_files/test_output', '-c', 'data/test_files/IntegerDepths_8taxa.tsv', '-aa', 'data/test_files/Converge7state_realAcids_all.fasta', '-d', '-m', 'data/master-table_test.tab', '-hm', 'data/heatmap_test.pdf', '-mp', 'data/manhattan_test.pdf']
-2019-02-19 00:51:26,212 - pcoc.ontinuous - INFO - Scenarios for all cutoffs are unique.
-2019-02-19 00:51:26,216 - pcoc.ontinuous - INFO - 10/14 scenarios eliminated due to convergent root: [1.25, 1.6875, 1.9375, 2.5, 3.1875, 3.6875, 4.25, 4.6875, 4.9375, 5.21875]
-2019-02-19 00:51:26,218 - pcoc.ontinuous - WARNING - Consider inverting your trait!
-2019-02-19 00:51:26,223 - pcoc.ontinuous - DEBUG - continuous trait values:
-{'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8}
-2019-02-19 00:51:26,297 - pcoc.ontinuous - INFO - Detecting convergent sites for scenarios...
-2019-02-19 00:51:26,298 - pcoc.ontinuous - INFO - Processing convergent scenario 1/4, trait cutoff = 5.71875
-
