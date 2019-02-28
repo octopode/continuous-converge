@@ -1,0 +1,53 @@
+continuous trait values:
+{'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8}
+~~~ convergent scenario 1/7 ~~~
+trait cutoff = 1.25
+2019-02-22 23:17:17,883 - INFO - alignment: data/test_files/Converge7state_realAcids_all.fasta
+2019-02-22 23:17:17,890 - INFO - Alphabet usage:
+A(12.50%), C(15.00%), E(6.25%), D(32.50%), G(3.75%), F(23.75%), I(2.50%), H(3.75%) 
+2019-02-22 23:17:17,891 - INFO - alignment ok after checking
+2019-02-22 23:17:17,892 - INFO - tree: data/test_files/ABCDEFGH.tree
+2019-02-22 23:17:17,904 - INFO - tree ok after checking
+2019-02-22 23:17:17,905 - INFO - Sequence and leaf names match.
+2019-02-22 23:17:49,232 - INFO - PCOC model: # filtered position: 2/10
+2019-02-22 23:17:49,237 - INFO - PC model: # filtered position: 2/10
+2019-02-22 23:17:49,248 - INFO - OC model: # filtered position: 0/10
+2019-02-22 23:17:49,256 - INFO - UNION model: # filtered position: 2/10
+2019-02-22 23:17:51,953 - INFO - --- 34.2334420681 seconds ---
+2019-02-22 23:17:51,954 - INFO - Output dir: data/test_files/test_output/scenarios/1_25/RUN_20190222_231717/
+~~~ convergent scenario 2/7 ~~~
+trait cutoff = 1.75
+2019-02-22 23:17:52,950 - INFO - alignment: data/test_files/Converge7state_realAcids_all.fasta
+2019-02-22 23:17:52,955 - INFO - Alphabet usage:
+A(12.50%), C(15.00%), E(6.25%), D(32.50%), G(3.75%), F(23.75%), I(2.50%), H(3.75%) 
+2019-02-22 23:17:52,955 - INFO - alignment ok after checking
+2019-02-22 23:17:52,955 - INFO - tree: data/test_files/ABCDEFGH.tree
+2019-02-22 23:17:52,977 - INFO - tree ok after checking
+2019-02-22 23:17:52,978 - INFO - Sequence and leaf names match.
+2019-02-22 23:18:24,916 - INFO - PCOC model: # filtered position: 2/10
+2019-02-22 23:18:24,922 - INFO - PC model: # filtered position: 2/10
+2019-02-22 23:18:24,935 - INFO - OC model: # filtered position: 0/10
+2019-02-22 23:18:24,943 - INFO - UNION model: # filtered position: 2/10
+2019-02-22 23:18:26,497 - INFO - --- 33.6262779236 seconds ---
+2019-02-22 23:18:26,498 - INFO - Output dir: data/test_files/test_output/scenarios/1_75/RUN_20190222_231752/
+~~~ convergent scenario 3/7 ~~~
+trait cutoff = 2.5
+2019-02-22 23:18:27,519 - INFO - alignment: data/test_files/Converge7state_realAcids_all.fasta
+2019-02-22 23:18:27,526 - INFO - Alphabet usage:
+A(12.50%), C(15.00%), E(6.25%), D(32.50%), G(3.75%), F(23.75%), I(2.50%), H(3.75%) 
+2019-02-22 23:18:27,527 - INFO - alignment ok after checking
+2019-02-22 23:18:27,528 - INFO - tree: data/test_files/ABCDEFGH.tree
+2019-02-22 23:18:27,539 - INFO - tree ok after checking
+2019-02-22 23:18:27,540 - INFO - Sequence and leaf names match.
+Traceback (most recent call last):
+  File "/usr/local/bin/pcoc_det.py", line 667, in <module>
+    mk_detect(tree_filename, ali_basename, OutDirName)
+  File "/usr/local/bin/pcoc_det.py", line 481, in mk_detect
+    bpp_lib.make_estim(ali_basename, e1, e2, g_tree, NBCATest=NbCat_Est, suffix="_noOneChange",  OneChange = False, ext="", max_gap_allowed=args.max_gap_allowed, gamma=args.gamma, inv_gamma=args.inv_gamma)
+  File "/usr/local/bin/bpp_lib.py", line 218, in make_estim
+    out = commands.getoutput(command)
+  File "/usr/lib/python2.7/commands.py", line 50, in getoutput
+    return getstatusoutput(cmd)[1]
+  File "/usr/lib/python2.7/commands.py", line 60, in getstatusoutput
+    text = pipe.read()
+KeyboardInterrupt

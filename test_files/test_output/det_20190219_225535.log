@@ -1,0 +1,120 @@
+2019-02-19 22:55:36,010 - pcoc.ontinuous - DEBUG - ['data/pcoc_cont_scenarios.py', '-t', 'data/test_files/ABCDEFGH.tree', '-o', 'data/test_files/test_output', '-c', 'data/test_files/IntegerDepths_8taxa.tsv', '-aa', 'data/test_files/Converge7state_realAcids_all.fasta', '-d', '-m', 'data/master-table_test.tab', '-hm', 'data/heatmap_test.pdf', '-mp', 'data/manhattan_test.pdf']
+2019-02-19 22:55:36,084 - pcoc.ontinuous - INFO - Scenarios for all cutoffs are unique.
+2019-02-19 22:55:36,088 - pcoc.ontinuous - INFO - 10/14 scenarios eliminated due to convergent root: [1.25, 1.6875, 1.9375, 2.5, 3.1875, 3.6875, 4.25, 4.6875, 4.9375, 5.21875]
+2019-02-19 22:55:36,090 - pcoc.ontinuous - WARNING - Consider inverting your trait!
+2019-02-19 22:55:36,097 - pcoc.ontinuous - DEBUG - continuous trait values:
+{'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8}
+2019-02-19 22:55:36,186 - pcoc.ontinuous - INFO - Detecting convergent sites for scenarios...
+2019-02-19 22:55:36,187 - pcoc.ontinuous - INFO - Processing convergent scenario 1/4, trait cutoff = 5.71875
+
+2019-02-19 22:55:36,188 - pcoc.ontinuous - DEBUG - Tree: ((((A:2,B:2)1:1,C:3)1:1,((D:2,E:2)1:1,F:3)1:1)1:4,(G:4,H:4)1:4);
+2019-02-19 22:55:36,195 - pcoc.ontinuous - DEBUG - repfasta: data/test_files/test_output/fasta
+2019-02-19 22:55:36,195 - pcoc.ontinuous - DEBUG - repest: data/test_files/test_output/Estimations
+2019-02-19 22:55:36,196 - pcoc.ontinuous - DEBUG - reptree: data/test_files/test_output/Trees
+2019-02-19 22:55:36,239 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 1
+2019-02-19 22:55:36,535 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 2
+2019-02-19 22:55:36,756 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 3
+2019-02-19 22:55:36,962 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 4
+2019-02-19 22:55:37,242 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 5
+2019-02-19 22:55:37,469 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 6
+2019-02-19 22:55:37,680 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 7
+2019-02-19 22:55:37,993 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 8
+2019-02-19 22:55:38,288 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 9
+2019-02-19 22:55:38,661 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 10
+2019-02-19 22:55:38,863 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 1
+2019-02-19 22:55:39,053 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 2
+2019-02-19 22:55:39,285 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 3
+2019-02-19 22:55:39,570 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 4
+2019-02-19 22:55:39,818 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 5
+2019-02-19 22:55:40,144 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 6
+2019-02-19 22:55:40,548 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 7
+2019-02-19 22:55:40,740 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 8
+2019-02-19 22:55:40,928 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 9
+2019-02-19 22:55:41,187 - pcoc.ontinuous - DEBUG - Estime e1: 2 e2: 10
+2019-02-19 22:55:41,432 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 1
+2019-02-19 22:55:41,670 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 2
+2019-02-19 22:55:41,912 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 3
+2019-02-19 22:55:42,152 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 4
+2019-02-19 22:55:42,354 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 5
+2019-02-19 22:55:42,551 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 6
+2019-02-19 22:55:42,728 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 7
+2019-02-19 22:55:42,896 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 8
+2019-02-19 22:55:43,059 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 9
+2019-02-19 22:55:43,258 - pcoc.ontinuous - DEBUG - Estime e1: 3 e2: 10
+2019-02-19 22:55:43,465 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 1
+2019-02-19 22:55:43,642 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 2
+2019-02-19 22:55:43,862 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 3
+2019-02-19 22:55:44,066 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 4
+2019-02-19 22:55:44,254 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 5
+2019-02-19 22:55:44,430 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 6
+2019-02-19 22:55:44,591 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 7
+2019-02-19 22:55:44,743 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 8
+2019-02-19 22:55:44,940 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 9
+2019-02-19 22:55:45,148 - pcoc.ontinuous - DEBUG - Estime e1: 4 e2: 10
+2019-02-19 22:55:45,312 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 1
+2019-02-19 22:55:45,535 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 2
+2019-02-19 22:55:45,724 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 3
+2019-02-19 22:55:45,949 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 4
+2019-02-19 22:55:46,129 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 5
+2019-02-19 22:55:46,300 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 6
+2019-02-19 22:55:46,491 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 7
+2019-02-19 22:55:46,795 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 8
+2019-02-19 22:55:47,048 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 9
+2019-02-19 22:55:47,244 - pcoc.ontinuous - DEBUG - Estime e1: 5 e2: 10
+2019-02-19 22:55:47,467 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 1
+2019-02-19 22:55:47,719 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 2
+2019-02-19 22:55:47,961 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 3
+2019-02-19 22:55:48,149 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 4
+2019-02-19 22:55:48,361 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 5
+2019-02-19 22:55:48,608 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 6
+2019-02-19 22:55:48,799 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 7
+2019-02-19 22:55:49,054 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 8
+2019-02-19 22:55:49,243 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 9
+2019-02-19 22:55:49,431 - pcoc.ontinuous - DEBUG - Estime e1: 6 e2: 10
+2019-02-19 22:55:49,720 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 1
+2019-02-19 22:55:50,190 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 2
+2019-02-19 22:55:50,386 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 3
+2019-02-19 22:55:50,664 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 4
+2019-02-19 22:55:51,047 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 5
+2019-02-19 22:55:51,402 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 6
+2019-02-19 22:55:51,612 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 7
+2019-02-19 22:55:51,795 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 8
+2019-02-19 22:55:52,070 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 9
+2019-02-19 22:55:52,388 - pcoc.ontinuous - DEBUG - Estime e1: 7 e2: 10
+2019-02-19 22:55:52,657 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 1
+2019-02-19 22:55:52,929 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 2
+2019-02-19 22:55:53,155 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 3
+2019-02-19 22:55:53,475 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 4
+2019-02-19 22:55:53,681 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 5
+2019-02-19 22:55:53,909 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 6
+2019-02-19 22:55:54,153 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 7
+2019-02-19 22:55:54,437 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 8
+2019-02-19 22:55:54,647 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 9
+2019-02-19 22:55:54,959 - pcoc.ontinuous - DEBUG - Estime e1: 8 e2: 10
+2019-02-19 22:55:56,629 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 1
+2019-02-19 22:55:57,129 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 2
+2019-02-19 22:55:57,488 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 3
+2019-02-19 22:55:58,018 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 4
+2019-02-19 22:55:58,560 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 5
+2019-02-19 22:55:59,408 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 6
+2019-02-19 22:55:59,862 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 7
+2019-02-19 22:56:00,990 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 8
+2019-02-19 22:56:02,028 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 9
+2019-02-19 22:56:02,477 - pcoc.ontinuous - DEBUG - Estime e1: 9 e2: 10
+2019-02-19 22:56:02,899 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 1
+2019-02-19 22:56:03,330 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 2
+2019-02-19 22:56:03,737 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 3
+2019-02-19 22:56:04,116 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 4
+2019-02-19 22:56:04,899 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 5
+2019-02-19 22:56:05,301 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 6
+2019-02-19 22:56:05,648 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 7
+2019-02-19 22:56:05,986 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 8
+2019-02-19 22:56:06,422 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 9
+2019-02-19 22:56:06,761 - pcoc.ontinuous - DEBUG - Estime e1: 10 e2: 10
+2019-02-19 22:56:17,651 - pcoc.ontinuous - INFO - Processing convergent scenario 2/4, trait cutoff = 6.5
+
+2019-02-19 22:56:17,665 - pcoc.ontinuous - DEBUG - Tree: ((((A:2,B:2)1:1,C:3)1:1,((D:2,E:2)1:1,F:3)1:1)1:4,(G:4,H:4)1:4);
+2019-02-19 22:56:17,676 - pcoc.ontinuous - DEBUG - repfasta: data/test_files/test_output/fasta
+2019-02-19 22:56:17,678 - pcoc.ontinuous - DEBUG - repest: data/test_files/test_output/Estimations
+2019-02-19 22:56:17,678 - pcoc.ontinuous - DEBUG - reptree: data/test_files/test_output/Trees
+2019-02-19 22:56:17,737 - pcoc.ontinuous - DEBUG - Estime e1: 1 e2: 1

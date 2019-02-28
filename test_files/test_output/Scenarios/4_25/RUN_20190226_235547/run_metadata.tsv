@@ -1,0 +1,13 @@
+Alignment	Converge7state_realAcids_all.fasta
+Convergent_branches	['10', '5,4,3,2,1,0']
+NbCat_Est	10
+Position_to_highlight	[]
+Tree	ABCDEFGH.tree
+date	20190226_235547
+gamma	False
+inv_gamma	False
+max_gap_allowed	5
+max_gap_allowed_in_conv_leaves	5
+pp_threshold_OC	0.99
+pp_threshold_PC	0.99
+pp_threshold_PCOC	0.99

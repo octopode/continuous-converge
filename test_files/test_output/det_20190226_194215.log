@@ -1,0 +1,18 @@
+2019-02-26 19:42:15,967 - __main__ - DEBUG - ['pcoc_cont_scenarios.py', '-t', 'test_files/ABCDEFGH.tree', '-o', 'test_files/test_output', '-c', 'test_files/IntegerDepths_8taxa.tsv', '-aa', 'test_files/Converge7state_realAcids_all.fasta', '-i', '-m', 'master-table_test.tab', '-hm', 'heatmap_test.pdf', '-mp', 'manhattan_test.pdf', '--det']
+2019-02-26 19:42:16,025 - __main__ - INFO - Scenarios for all cutoffs are unique.
+2019-02-26 19:42:16,032 - __main__ - INFO - 5/12 scenarios eliminated due to convergent root:
+[4.9166666666666661, 5.5, 6.5, 7.25, 7.75]
+2019-02-26 19:42:16,057 - __main__ - INFO - Drawing trees...
+2019-02-26 19:42:17,179 - __main__ - DEBUG - continuous trait values:
+{'A': 1, 'C': 3, 'B': 2, 'E': 5, 'D': 4, 'G': 7, 'F': 6, 'H': 8}
+2019-02-26 19:42:17,180 - __main__ - INFO - Detecting convergent sites...
+2019-02-26 19:42:17,181 - __main__ - INFO - convergent scenario 1/7: cutoff 1.25: 0
+2019-02-26 19:43:12,652 - __main__ - INFO - convergent scenario 2/7: cutoff 1.75: 2,0
+2019-02-26 19:44:03,935 - __main__ - INFO - convergent scenario 3/7: cutoff 2.5: 4,2,1,0
+2019-02-26 19:44:48,184 - __main__ - INFO - convergent scenario 4/7: cutoff 3.25: 4,3,2,1,0
+2019-02-26 19:45:17,466 - __main__ - INFO - convergent scenario 5/7: cutoff 3.75: 10,4,3,2,1,0
+2019-02-26 19:45:44,033 - __main__ - INFO - convergent scenario 6/7: cutoff 4.25: 10/5,4,3,2,1,0
+2019-02-26 19:46:15,041 - __main__ - INFO - convergent scenario 7/7: cutoff 4.66666666667: 10/7,5,4,3,2,1,0
+2019-02-26 19:46:41,376 - __main__ - INFO - Drawing heatmap at test_files/test_output/heatmap_test.pdf
+2019-02-26 19:46:41,573 - __main__ - INFO - Drawing Manhattan plot at test_files/test_output/manhattan_test.pdf
+2019-02-26 19:46:41,583 - __main__ - INFO - Saving master table of results at master-table_test.tab

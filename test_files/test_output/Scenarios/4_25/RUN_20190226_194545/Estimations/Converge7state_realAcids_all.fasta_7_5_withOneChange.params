@@ -1,0 +1,20 @@
+# Log likelihood = -337.74174019180412642527
+# Number of sites = 10
+
+# Substitution model parameters:
+nonhomogeneous=general
+nonhomogeneous.number_of_models=3
+
+model1=LGL08_CAT_C7(nbCat=10)()
+model1.nodes_id=6,7,8,9,11,12,13
+
+model2=OneChange(model=LGL08_CAT_C5(nbCat=10)())
+model2.nodes_id=5,10
+
+model3=LGL08_CAT_C5(nbCat=10)()
+model3.nodes_id=0,1,2,3,4
+
+# Root frequencies:
+nonhomogeneous.root_freq=FromModel(model=LGL08_CAT_C7(nbCat=10)())
+# Rate distribution parameters:
+rate_distribution=Constant()

@@ -2,6 +2,8 @@
 
 import pcoc_cont_scenarios as target
 
+import os
+
 
 '''
 def test_init_tree():
@@ -15,6 +17,18 @@ def test_init_tree():
 
     assert False
 '''
+
+def test_args2argv():
+
+    argv = ["--one", "1", "--two", "2", "--three", "3"]
+    parser = target.argparse.ArgumentParser()
+    parser.add_argument('--one', type=int, default=1)
+    parser.add_argument('--two', type=int, default=2)
+    parser.add_argument('--three', type=int, default=3)
+    input = parser.parse_args(argv)
+
+    # set() because order does not matter
+    assert set(target.args2argv(input)) == set(argv)
 
 # test ancestral reconstruction function
 def test_ancR():
@@ -50,6 +64,7 @@ def test_binBy_nBins():
 
     output = ([4.5, 8.5], [2.5, 6.5, 10.5])
 
+
     assert target.binBy(input, fixNumBins = numBins) == output
 
 def test_binBy_binWidth():
@@ -57,6 +72,7 @@ def test_binBy_binWidth():
     binWidth = 4
 
     output = ([4.5, 8.5], [2.5, 6.5, 10.5])
+
 
     assert target.binBy(input, fixBinWidth = binWidth) == output
 
@@ -108,6 +124,7 @@ def test_uniqueScenarios():
                     [False,True,True]]
     output = target.pd.DataFrame(columns=avgCutoffs, data=conDiscrete)
 
+
     assert target.uniqueScenarios(input).equals(output)
 
 def test_convergentRootFilter():
@@ -132,6 +149,7 @@ def test_convergentRootFilter():
                 [False],
                 [False]]
     output = target.pd.DataFrame(columns=filteredCutoffs, data=filteredDiscrete)
+
 
     assert target.convergentRootFilter(input).equals(output)
 
@@ -177,5 +195,42 @@ def test_scenarioStrings():
 
     assert target.scenarioStrings(input, tree) == output
 
-# at this point, reconnect the filters and run the program
-# then, refactor the PCOC scripts.
+
+def disabled_test_det_mk_detect():
+    # CAUTION: this one takes awhile
+
+    # input
+    manual_mode_nodes = {"T":[14, 9, 6],
+                         "C":[13, 12, 11, 8]}
+
+    # directory this test_...py script is in
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+
+    tree_filename = dir_path + "/test_files/ABCDEFGH.tree"
+    # try loading the Newick into RAM; note that it is no longer actually a filename
+    tree_filename = target.Tree(tree_filename).write()
+    ali_filename = dir_path + "/test_files/Converge7state_realAcids_all.fasta"
+    OutDirName = dir_path + "/test_files/test_output"
+
+    tempDirs = target.det.get_temp_dirs(ali_filename, OutDirName)
+
+    ali = target.AlignIO.read(ali_filename, "fasta")
+
+    # output
+    outDict = {'PCOC': {0: 0.98776456995135431, 1: 0.770431306451275, 2: 0.89761946663107584, 3: 0.0991179423639134,
+                        4: 0.11497691785505021, 5: 0.65316350744083285, 6: 0.54772777783491067, 7: 0.56506668895596113,
+                        8: 0.082620720326110342, 9: 0.00058786069163569701},
+               'OC': {0: 0.48526744245668019, 1: 0.44903619735509348, 2: 0.47398015275966554, 3: 0.47704571896670039,
+                      4: 0.47590655215689426, 5: 0.50825351823505061, 6: 0.50484097383275128, 7: 0.50887462012502926,
+                      8: 0.50159629752294632, 9: 0.48475219546269044},
+               'Sites': {0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10},
+               'PC': {0: 0.99766551234963974, 1: 0.90931033001525507, 2: 0.96521065373097248, 3: 0.16643203866962952,
+                      4: 0.18284000859464614, 5: 0.64098650008475289, 6: 0.54361244613942983, 7: 0.55684601648332299,
+                      8: 0.0890370485404164, 9: 0.000727989717059959},
+               'Indel_prop': {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 0.0, 7: 0.0, 8: 0.0, 9: 0.0},
+               'Indel_prop(ConvLeaves)': {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 0.0, 7: 0.0, 8: 0.0,
+                                          9: 0.0}}
+    # it's important to sort the columns or DataFrame.equals() won't work
+    output = target.pd.DataFrame.from_dict(outDict).sort_index(axis=1)
+
+    assert target.det.mk_detect(manual_mode_nodes, tree_filename, ali, *tempDirs).sort_index(axis=1).equals(output)

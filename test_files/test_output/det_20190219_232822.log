@@ -1,0 +1,120 @@
+2019-02-19 23:28:23,017 - __main__ - DEBUG - ['data/pcoc_cont_scenarios.py', '-t', 'data/test_files/ABCDEFGH.tree', '-o', 'data/test_files/test_output', '-c', 'data/test_files/IntegerDepths_8taxa.tsv', '-aa', 'data/test_files/Converge7state_realAcids_all.fasta', '-d', '-m', 'data/master-table_test.tab', '-hm', 'data/heatmap_test.pdf', '-mp', 'data/manhattan_test.pdf']
+2019-02-19 23:28:23,168 - __main__ - INFO - Scenarios for all cutoffs are unique.
+2019-02-19 23:28:23,171 - __main__ - INFO - 10/14 scenarios eliminated due to convergent root: [1.25, 1.6875, 1.9375, 2.5, 3.1875, 3.6875, 4.25, 4.6875, 4.9375, 5.21875]
+2019-02-19 23:28:23,172 - __main__ - WARNING - Consider inverting your trait!
+2019-02-19 23:28:23,179 - __main__ - DEBUG - continuous trait values:
+{'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8}
+2019-02-19 23:28:23,250 - __main__ - INFO - Detecting convergent sites for scenarios...
+2019-02-19 23:28:23,250 - __main__ - INFO - Processing convergent scenario 1/4, trait cutoff = 5.71875
+
+2019-02-19 23:28:23,251 - pcoc_det_mod - DEBUG - Tree: ((((A:2,B:2)1:1,C:3)1:1,((D:2,E:2)1:1,F:3)1:1)1:4,(G:4,H:4)1:4);
+2019-02-19 23:28:23,253 - pcoc_det_mod - DEBUG - repfasta: data/test_files/test_output/fasta
+2019-02-19 23:28:23,273 - pcoc_det_mod - DEBUG - repest: data/test_files/test_output/Estimations
+2019-02-19 23:28:23,273 - pcoc_det_mod - DEBUG - reptree: data/test_files/test_output/Trees
+2019-02-19 23:28:23,311 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 1
+2019-02-19 23:28:23,516 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 2
+2019-02-19 23:28:23,719 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 3
+2019-02-19 23:28:23,883 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 4
+2019-02-19 23:28:24,079 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 5
+2019-02-19 23:28:24,287 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 6
+2019-02-19 23:28:24,456 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 7
+2019-02-19 23:28:24,627 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 8
+2019-02-19 23:28:24,781 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 9
+2019-02-19 23:28:24,937 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 10
+2019-02-19 23:28:25,100 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 1
+2019-02-19 23:28:25,256 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 2
+2019-02-19 23:28:25,394 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 3
+2019-02-19 23:28:25,592 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 4
+2019-02-19 23:28:25,772 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 5
+2019-02-19 23:28:25,930 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 6
+2019-02-19 23:28:26,105 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 7
+2019-02-19 23:28:26,258 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 8
+2019-02-19 23:28:26,418 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 9
+2019-02-19 23:28:26,561 - pcoc_det_mod - DEBUG - Estime e1: 2 e2: 10
+2019-02-19 23:28:26,703 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 1
+2019-02-19 23:28:26,855 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 2
+2019-02-19 23:28:27,011 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 3
+2019-02-19 23:28:27,290 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 4
+2019-02-19 23:28:27,474 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 5
+2019-02-19 23:28:27,667 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 6
+2019-02-19 23:28:27,804 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 7
+2019-02-19 23:28:27,944 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 8
+2019-02-19 23:28:28,114 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 9
+2019-02-19 23:28:28,272 - pcoc_det_mod - DEBUG - Estime e1: 3 e2: 10
+2019-02-19 23:28:28,432 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 1
+2019-02-19 23:28:28,609 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 2
+2019-02-19 23:28:28,761 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 3
+2019-02-19 23:28:28,920 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 4
+2019-02-19 23:28:29,074 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 5
+2019-02-19 23:28:29,255 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 6
+2019-02-19 23:28:29,414 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 7
+2019-02-19 23:28:29,549 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 8
+2019-02-19 23:28:29,746 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 9
+2019-02-19 23:28:29,892 - pcoc_det_mod - DEBUG - Estime e1: 4 e2: 10
+2019-02-19 23:28:30,040 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 1
+2019-02-19 23:28:30,203 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 2
+2019-02-19 23:28:30,355 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 3
+2019-02-19 23:28:30,503 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 4
+2019-02-19 23:28:30,656 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 5
+2019-02-19 23:28:30,825 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 6
+2019-02-19 23:28:30,941 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 7
+2019-02-19 23:28:31,092 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 8
+2019-02-19 23:28:31,263 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 9
+2019-02-19 23:28:31,430 - pcoc_det_mod - DEBUG - Estime e1: 5 e2: 10
+2019-02-19 23:28:31,600 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 1
+2019-02-19 23:28:31,746 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 2
+2019-02-19 23:28:31,895 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 3
+2019-02-19 23:28:32,047 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 4
+2019-02-19 23:28:32,186 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 5
+2019-02-19 23:28:32,339 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 6
+2019-02-19 23:28:32,476 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 7
+2019-02-19 23:28:32,619 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 8
+2019-02-19 23:28:32,763 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 9
+2019-02-19 23:28:32,909 - pcoc_det_mod - DEBUG - Estime e1: 6 e2: 10
+2019-02-19 23:28:33,066 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 1
+2019-02-19 23:28:33,200 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 2
+2019-02-19 23:28:33,344 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 3
+2019-02-19 23:28:33,485 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 4
+2019-02-19 23:28:33,648 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 5
+2019-02-19 23:28:33,791 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 6
+2019-02-19 23:28:33,956 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 7
+2019-02-19 23:28:34,113 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 8
+2019-02-19 23:28:34,274 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 9
+2019-02-19 23:28:34,420 - pcoc_det_mod - DEBUG - Estime e1: 7 e2: 10
+2019-02-19 23:28:34,567 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 1
+2019-02-19 23:28:34,717 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 2
+2019-02-19 23:28:34,875 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 3
+2019-02-19 23:28:35,056 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 4
+2019-02-19 23:28:35,215 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 5
+2019-02-19 23:28:35,396 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 6
+2019-02-19 23:28:35,574 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 7
+2019-02-19 23:28:35,742 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 8
+2019-02-19 23:28:35,930 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 9
+2019-02-19 23:28:36,153 - pcoc_det_mod - DEBUG - Estime e1: 8 e2: 10
+2019-02-19 23:28:36,344 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 1
+2019-02-19 23:28:36,528 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 2
+2019-02-19 23:28:37,390 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 3
+2019-02-19 23:28:37,928 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 4
+2019-02-19 23:28:38,278 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 5
+2019-02-19 23:28:38,670 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 6
+2019-02-19 23:28:38,928 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 7
+2019-02-19 23:28:39,413 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 8
+2019-02-19 23:28:39,601 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 9
+2019-02-19 23:28:39,812 - pcoc_det_mod - DEBUG - Estime e1: 9 e2: 10
+2019-02-19 23:28:40,007 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 1
+2019-02-19 23:28:40,230 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 2
+2019-02-19 23:28:40,455 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 3
+2019-02-19 23:28:40,736 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 4
+2019-02-19 23:28:41,222 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 5
+2019-02-19 23:28:41,668 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 6
+2019-02-19 23:28:41,929 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 7
+2019-02-19 23:28:42,240 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 8
+2019-02-19 23:28:42,483 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 9
+2019-02-19 23:28:42,715 - pcoc_det_mod - DEBUG - Estime e1: 10 e2: 10
+2019-02-19 23:28:48,618 - __main__ - INFO - Processing convergent scenario 2/4, trait cutoff = 6.5
+
+2019-02-19 23:28:48,619 - pcoc_det_mod - DEBUG - Tree: ((((A:2,B:2)1:1,C:3)1:1,((D:2,E:2)1:1,F:3)1:1)1:4,(G:4,H:4)1:4);
+2019-02-19 23:28:48,626 - pcoc_det_mod - DEBUG - repfasta: data/test_files/test_output/fasta
+2019-02-19 23:28:48,626 - pcoc_det_mod - DEBUG - repest: data/test_files/test_output/Estimations
+2019-02-19 23:28:48,627 - pcoc_det_mod - DEBUG - reptree: data/test_files/test_output/Trees
+2019-02-19 23:28:48,679 - pcoc_det_mod - DEBUG - Estime e1: 1 e2: 1

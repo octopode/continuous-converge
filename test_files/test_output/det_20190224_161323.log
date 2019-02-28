@@ -1,0 +1,1 @@
+2019-02-24 16:13:23,262 - __main__ - DEBUG - ['pcoc_cont_scenarios.py', '-t', 'test_files/ABCDEFGH.tree', '-o', 'test_files/test_output', '-c', 'test_files/IntegerDepths_8taxa.tsv', '-aa', 'test_files/Converge7state_realAcids_all.fasta', '-i', '-m', 'master-table_test.tab', '-hm', 'heatmap_test.pdf', '-mp', 'manhattan_test.pdf']

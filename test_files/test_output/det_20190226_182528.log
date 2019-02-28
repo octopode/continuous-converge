@@ -1,0 +1,8 @@
+2019-02-26 18:25:28,964 - __main__ - DEBUG - ['pcoc_cont_scenarios.py', '-t', 'test_files/ABCDEFGH.tree', '-o', 'test_files/test_output', '-c', 'test_files/IntegerDepths_8taxa.tsv', '-aa', 'test_files/Converge7state_realAcids_all.fasta', '-i', '-m', 'master-table_test.tab', '-hm', 'heatmap_test.pdf', '-mp', 'manhattan_test.pdf']
+2019-02-26 18:25:29,025 - __main__ - INFO - Scenarios for all cutoffs are unique.
+2019-02-26 18:25:29,041 - __main__ - INFO - 5/12 scenarios eliminated due to convergent root:
+[4.9166666666666661, 5.5, 6.5, 7.25, 7.75]
+2019-02-26 18:25:29,099 - __main__ - WARNING - Cutoff 1.25 not loaded
+2019-02-26 18:25:30,433 - __main__ - INFO - Drawing heatmap at test_files/test_output/heatmap_test.pdf
+2019-02-26 18:25:30,712 - __main__ - INFO - Drawing Manhattan plot at test_files/test_output/manhattan_test.pdf
+2019-02-26 18:25:30,723 - __main__ - INFO - Saving master table of results at master-table_test.tab

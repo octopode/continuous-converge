@@ -1,0 +1,4 @@
+2019-02-27 06:09:57,247 - __main__ - DEBUG - ['pcoc_cont_scenarios.py', '-t', 'test_files/ABCDEFGH.tree', '-o', 'test_files/test_output', '-c', 'test_files/IntegerDepths_8taxa.tsv', '-aa', 'test_files/Converge7state_realAcids_all.fasta', '-i', '-m', 'master-table_test.tab', '-hm', 'heatmap_test.pdf', '-mp', 'manhattan_test.pdf', '--sim', '0.0001']
+2019-02-27 06:09:57,309 - __main__ - INFO - Scenarios for all cutoffs are unique.
+2019-02-27 06:09:57,313 - __main__ - INFO - 5/12 scenarios eliminated due to convergent root:
+[4.9166666666666661, 5.5, 6.5, 7.25, 7.75]
