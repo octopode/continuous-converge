@@ -43,6 +43,7 @@ import subprocess
 import datetime
 import numpy as np
 import pandas as pd
+from ast import literal_eval
 from ete3 import Tree, NodeStyle, TreeStyle, TextFace, CircleFace
 from pprint import pprint
 from Bio import AlignIO
@@ -84,7 +85,9 @@ def parse_args(argv):
     Options.add_argument('-tt', '--test_trees', action="store_true",
                          help="Draw test trees to evaluate the discretization scheme")
     Options.add_argument('--det', action="store_true", help="Set to actually run pcoc_det.py")
-    Options.add_argument('--sim', type=float, default=0, help="Set PCOC PP threshold for post hoc simulation, 0.0001 = all sites")
+    Options.add_argument('--sim', action="store_true", help="Set to run post hoc simulation")
+    Options.add_argument('--sim_pp_thres', type=float, default=0.8, help="Set PCOC PP threshold for running a post hoc simulation, 0.0001 = all sites")
+    Options.add_argument('--sim_alpha_vals', type=float, nargs='*', default=[0.10, 0.05, 0.01], help="alpha values to test in post hic simulations")
     Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
     Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
     Options.add_argument('-hm', '--heatmap', type=str,
@@ -135,7 +138,7 @@ def parse_args(argv):
                               default=False)
     detOptions.add_argument('-CATX_est', type=int, choices=[10, 60],
                                  help="Profile categorie to estimate data (10->C10 or 60->C60). (default: 10)",
-                                 default=60)
+                                 default=10)
     detOptions.add_argument('--gamma', action="store_true",
                                  help="Use rate_distribution=Gamma(n=4) instead of Constant()",
                                  default=False)
@@ -168,9 +171,9 @@ def parse_args(argv):
     simOptions.add_argument('-n_sites', type=int, metavar="INT",
                              help="Number of simulated sites per alignment. (default: 1000)",
                              default=1000)
-    simOptions.add_argument('-CATX_sim', type=int, choices=[10, 60],
-                             help="Profile categories to simulate data (10->C10 or 60->C60). (default: 60)",
-                             default=60)
+    #simOptions.add_argument('-CATX_sim', type=int, choices=[10, 60],
+    #                         help="Profile categories to simulate data (10->C10 or 60->C60). (default: 10)",
+    #                         default=10)
     simOptions.add_argument('-min_dist_CAT', type=float, metavar="FLOAT",
                              help="Minimum distance between Ancestral and Convergent profiles to simulate the alignment (default: no limits)",
                              default=0)
@@ -187,10 +190,10 @@ def parse_args(argv):
     # parse the above and leave remaining argv for det
     simArgs, detArgv = simParser.parse_known_args(passthruArgv)
 
-    return contArgs, detArgv, simArgv
+    return contArgs, detArgv, simArgs, simArgv
 
 
-def main(contArgs, detArgv, simArgv):
+def main(contArgs, detArgv, simArgs, simArgv):
     ##########
     # inputs #
     ##########
@@ -232,6 +235,7 @@ def main(contArgs, detArgv, simArgv):
 
     # Load treefile
     tree = init_tree(contArgs.tree)
+    tree_newick = tree.write()
     # not mucking with additive trees yet; ultrametrize the tree and normalize to length 1
     tree.convert_to_ultrametric(tree_length=1)
 
@@ -255,6 +259,7 @@ def main(contArgs, detArgv, simArgv):
     scenarios = scenarioStrings(binDF, tree)
 
     scenDir = contArgs.output + "/Scenarios"
+    simDir = contArgs.output + "/Simulations"
 
     ### Draw trees depicting convergent scenarios
 
@@ -346,38 +351,73 @@ def main(contArgs, detArgv, simArgv):
     # contArgs.sim is a float value specifying how strong the a priori PP signal needs to be at a site to warrant
     # post hoc simulation.
     if contArgs.sim:
+        # make a dir for pickled sim results
+        try:
+            os.mkdir(simDir)
+        except:
+            pass
+
         # init post hoc simulation DF with sites index
         simDf = pd.DataFrame(index = metaDfWide.index)
 
         # get the highest PP for each site and the cutoff for that PP
-        simDf["PP_max"] = [max(row[1].tolist()) for row in metaDfWide.iterrows()]
+        simDf["PP_Max"] = [max(row[1].tolist()) for row in metaDfWide.iterrows()]
 
         # get the cutoff for that PP
-        simDf["Cutoff"] = [metaDfWide.columns[row[1].tolist().index(simDf["PP_max"][rowNum+1])] for rowNum, row in enumerate(metaDfWide.iterrows())]
+        simDf["Cutoff"] = [metaDfWide.columns[row[1].tolist().index(simDf["PP_Max"][rowNum+1])] for rowNum, row in enumerate(metaDfWide.iterrows())]
         # below should be the same command, using .iloc() for speed
-        #simDf["Cutoff"] = [metaDfWide.columns[row[1].tolist().index(simDf.iloc(rowNum + 1, "PP_max"))] for rowNum, row in enumerate(metaDfWide.iterrows())]
+        #simDf["Cutoff"] = [metaDfWide.columns[row[1].tolist().index(simDf.iloc(rowNum + 1, "PP_Max"))] for rowNum, row in enumerate(metaDfWide.iterrows())]
 
         # lnL matrix lookup is not by site, but by cutoff
         # so lnL matrices for all top cutoffs are loaded into memory
         # if this gets too heavy I can save/read the matrices to disk
-        logger.info("Loading site-model log-likelihood matrices...")
+        logger.info("Recovering ML CATegories for sites...")
         # make a set of just the relevant cutoffs
-        maxPPcutoffsSet = set([cutoff for cutoff in simDf["Cutoff"] if cutoff >= contArgs.sim])
+        #maxPPcutoffsSet = set([cutoff for cutoff in simDf["Cutoff"] if cutoff >= contArgs.sim_pp_thres])
+        # ^this is not right!
+        maxPPcutoffsSet = set(simDf.loc[simDf["PP_Max"] >= contArgs.sim_pp_thres]["Cutoff"])
         # load 3D matrices for those cutoffs
         # this is a slow step, probably from all the file handling
         # its complexity should scale with number of cutoffs, not sites.
-        lnLMatrices = {cutoff: consolidateBPPOutput(cutoff, scenDir) for cutoff in maxPPcutoffsSet}
+        lnLMatricesPCOC = {cutoff: consolidateBPPOutput(cutoff, scenDir, withOneChange=True) for cutoff in maxPPcutoffsSet}
+        #lnLMatricesPC = {cutoff: consolidateBPPOutput(cutoff, scenDir, withOneChange=False) for cutoff in maxPPcutoffsSet}
 
         # iterate over the sites and assign profiles and model lnLs to each
-        logger.info("Recovering ML CATegories for sites...")
         for site in range(simDf.shape[0]):
             # if the site made the cut for simulation
-            if simDf["Cutoff"].tolist()[site] >= contArgs.sim:
+            if simDf["PP_Max"].tolist()[site] >= contArgs.sim:
                 # get the profiles and the model lnL and tack them on the row
-                simDf.loc[site + 1, "CAT_Anc"], simDf.loc[str(site + 1), "CAT_Con"], simDf.loc[site + 1, "Model_lnL"] = getMLCATProfiles(site, lnLMatrices[cutoff])
+                simDf.loc[site + 1, "CAT_Anc"], simDf.loc[site + 1, "CAT_Con"], simDf.loc[site + 1, "lnL_PCOC"] = getMLCATProfiles(site, lnLMatricesPCOC[cutoff])
+                #simDf.loc[site + 1, "CAT_Anc_PC"], simDf.loc[site + 1, "CAT_Con_PC"], simDf.loc[site + 1, "lnL_PC"] = getMLCATProfiles(site, lnLMatricesPC[cutoff])
+
+        # display profile numbers as ints in the table
+        # but this crashes when there are NaNs :/
+        #simDf["CAT_Anc"] = simDf["CAT_Anc"].astype(float)
+        #simDf["CAT_Con"] = simDf["CAT_Con"].astype(float)
 
         postHocFilename = os.path.splitext(contArgs.master_table)[0] + "_posthoc.tsv"
         simDf.to_csv(postHocFilename, sep='\t')
+
+        # make a list of the different error curves required
+        # this amounts to the unique rows of simDf, less the lnL column
+        uniqueSims = simDf.dropna().reset_index()[["Cutoff", "CAT_Anc", "CAT_Con"]].drop_duplicates()
+        # get a column of scenario strings
+        uniqueSims["Scenario"] = [scenarios[cutoff] for cutoff in uniqueSims["Cutoff"].tolist()]
+
+        # load all the available error curves into a DataFrame: metadata mapped to list of confidence thresholds
+        availSims = loadSavedSims(simDir, tree_newick, simArgs.__dict__, alpha = contArgs.sim_alpha)
+
+        # left-join those to the table of unique required sims
+        uniqueSims = pd.merge(uniqueSims, availSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
+
+        # get rows for sims that still need to be run
+        newSims = uniqueSims.loc[uniqueSims["PP_Threshold"].isnull()]
+        # run them and update the table with confidence thresholds
+        newSims = runSiteSims(newSims, contArgs, simArgv, simDir, simArgs)
+
+        # left-join the unique sims table to the sitewise table
+        uniqueSims = pd.merge(uniqueSims, newSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
+
 
     if contArgs.heatmap:
         #print >> sys.stderr, "# MESSAGE: Drawing heatmap:"
@@ -743,7 +783,82 @@ def getMLCATProfiles(site, lnLs):
     lnL = lnLs[site][profileA][profileC]
 
     # return 1-indexed CAT numbers
-    return int(profileA + 1), int(profileC + 1), lnL
+    return profileA + 1, profileC + 1, lnL
+
+# search directory for all pickled error curves generated using the specified .__dict__ of args
+def loadSavedSims(simDir, tree, simArgs, alpha = [0.10, 0.05, 0.01]):
+
+    simsCatalog = pd.DataFrame(columns = ["Scenario", "CAT_Anc", "CAT_Con", "PP_Threshold"])
+
+    # paw thru all the files in the sim directory
+    for file in os.listdir(simDir):
+        curveParser = configparser.RawConfigParser()
+        curveParser.read(file)
+        # check that all pickled pcoc_sim [static] args are same or better than specified
+        # this should take a dict coming from parse_args(), not the argv that actually went to the pcoc_sim call
+        if (all([curveParser.get("sim_args", key) >= value for key, value in simArgs]) and
+            curveParser.get("tree", "newick") == tree):
+            # load it up! (from dict)
+            errorCurve = literal_eval(curveParser.get("sim_output", "error_curve"))
+            # get the PP values corresponding to passed levels of alpha
+            simsCatalog["PP_Threshold"].append(getConfThresholds(errorCurve, alpha))
+            # get dynamic sim metadata
+            simsCatalog["Scenario"].append(curveParser.get("sim_input", "scenario"))
+            simsCatalog["CAT_Anc"].append(curveParser.get("sim_input", "CAT_Anc"))
+            simsCatalog["CAT_Con"].append(curveParser.get("sim_input", "CAT_Con"))
+
+    return simsCatalog
+
+# run simulations as requested in the passed pd.DataFrame()
+def runSiteSims(newSims, contArgs, simArgv, simDir, simArgs):
+
+    #["Scenario", "CAT_Anc", "CAT_Con", "PP_Threshold"]
+    # system environment-type stuff
+    # location of the modified version of pcoc_sim.py that accepts manual profile specification
+    modifiedPCOCSim = os.path.abspath(os.path.join(os.path.realpath(__file__), '..'))
+    modifiedPCOCSim = os.path.join(modifiedPCOCSim, "pcoc_sim_manual.py")
+    #
+
+    # set args that are the same for all sims
+    simArgvStatic = [modifiedPCOCSim,
+                     "-t", contArgs.tree,
+                     "-o", simDir] + simArgv  # add additional site-detect args from command line
+    # error will be thrown if any of these are specified redundantly at the command line
+
+    # SIMULATE LOOP #
+
+    numSims = newSims.shape[0]
+    logger.info("Running {} new post hoc simulations...".format(numSims))
+
+    for i, row in enumerate(newSims.iterrows()):
+        logger.info("convergent scenario {}/{}: scenario: {}".format(i, numSims, str(row["Scenario"])))
+        simArgvDynamic = simArgvStatic + [
+            "-m", str(row["Scenario"]),
+            "--profile_a", str(row["CAT_Anc"]),
+            "--profile_a", str(row["CAT_Con"]),
+            ]
+
+        # run pcoc.det.py
+        subprocess.call(simArgvDynamic)
+        # END DETECT LOOP #
+
+    return newSims
+
+# take an error curve (dict form) and set of alpha values
+# return the PP thresholds for those alpha values
+def getConfThresholds(errorCurve, alpha):
+
+    # sort the alpha values descending
+    alpha = sorted(alpha, reversed=True)
+
+    ppThresholds = [None] * len(alpha)
+    i = 0
+    for key, value in errorCurve:
+        if value <= alpha[i] and i < len(alpha):
+            ppThresholds[i] = key
+            i += 1
+
+    return ppThresholds
 
 ### return list of columns of an alignment that are not gaps in the key sequence
 def keyAlignmentColumns(algt, keySeqID):
