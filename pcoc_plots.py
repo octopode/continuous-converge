@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+from Bio import AlignIO
 
 ### Create a discrete colormap for monochromatic light based on wavelength
 ### FPs are not monochromatic, so my work is not done here!
@@ -22,177 +23,158 @@ def realRainbow():
     norm = colors.BoundaryNorm(boundaries, cmap.N, clip=True)
     return cmap, norm
 
-### Draw heatmap with a wide pd.DataFrame() with indices to be used as labels, an output path and optionally:
-### an alignment to draw seq logo over the heatmap
-### a colormap to draw a colorimetric legend along the y-axis.
-def heatMapDF(df, outfile, rainbow=False):
+### draw a Manhattan plot of sitewise PPs and confidence windows
+def manhattanPlot(df, outPath, thresholdsPP=(0, 0.8, 0.9, 1), alpha=None, beta=None,
+                  xLabel="amino acid site", xSpacing=10, blkBkgd=False, width=24, height=8):
 
-    cutoffs = df.index.values.tolist()
-    sites = df.columns.values.tolist()
+    # DataFrame column names for certain data
+    # PCOC posterior probability (bar height)
+    pcocPP = "PP_Max"
+    # PP lower thresholds for Type I error
+    typeIPP = "PP_Threshold_TypeI"
+    # PP upper threshold for Type II error
+    typeIIPP = "PP_Threshold_TypeII"
+    # if the above columns are found then args alpha and beta will be checked for the corresponding error rates
+    # if typeIIPP < typeIPP then there are insufficient data to achieve the specified error rates at that site
+    # force column names for vectorized functions
+    df.rename(columns={typeIPP: typeIPP, typeIIPP: typeIIPP}, inplace=True)
 
-    pcocPP = df.values
+    # set the mode for significance calling
+    # True uses sitewise sims to control error rates
+    # False uses fixed PP thresholds
+    simErrorControl = typeIPP in df.columns and typeIIPP in df.columns and alpha and beta
 
-    # for dark bkgd
-    plt.style.use('dark_background')
-    fig, ax = plt.subplots()
+    if blkBkgd: plt.style.use('dark_background')
 
-    if rainbow:
-        # add color column to heatmap
-        sites = ["color"] + sites
-        # make a mask for all but the first column
-        mask = np.array(pcocPP.shape[0] * [[False] + ([True] * pcocPP.shape[1])], dtype=bool)
-        # add cutoffs to PP array as first column
-        pcocPP = np.hstack((np.array([cutoffs]).T, pcocPP)) # populate that column with cutoff vals
-
-        colorscale = np.ma.masked_where(mask, pcocPP)
-        heatmap = np.ma.masked_where(np.invert(mask), pcocPP)
-
-        # get the custom colormap and normalization
-        rbMap, rbNorm = realRainbow()
-        ax.pcolormesh(colorscale, cmap=rbMap, norm=rbNorm)
-        ppMesh = ax.pcolormesh(heatmap, vmin=0., vmax=1., cmap='Greys')
-    else:
-        ppMesh = ax.pcolormesh(pcocPP, vmin=0., vmax=1., cmap='Greys')
-
-    # for PCOC gene results
-    # Figure labels
-    ax.set_xlabel("site", fontsize=20)
-    plt.xticks(np.arange(len(sites)) + 0.5, ["color"] + [int(float(site)) for site in sites[1:]], rotation=90, size=7)
-    ax.xaxis.set_label_position('top')
-    ax.xaxis.set_ticks_position('top')
-    ax.set_ylabel("detection cutoff for emission wavelength (nm)", fontsize=20)
-    plt.yticks(np.arange(len(cutoffs)) + 0.5, [int(cutoff) for cutoff in cutoffs], size=20)
-    ax.invert_yaxis()
-    ax.patch.set_facecolor('white')
-    # for spine in ax.spines: ax.spines[spine].set_color('white')
-    cbar = fig.colorbar(ppMesh)
-    cbar.ax.text(0.55, 0.025, 'PCOC PP', rotation=90, ha='center', va='bottom', transform=cbar.ax.transAxes,
-                 fontsize=8, color='black')
-
-    fig.tight_layout()
-    # plt.show()
-    fig.set_size_inches(24, 8)
-    #plt.savefig(outfile, transparent=True)
-    plt.savefig(outfile)
-
-    '''
-    # for PCOC calling-accuracy heatmaps
-    # Figure labels
-    ax.set_xlabel("detection cutoff (nm)", fontsize=20)
-    plt.xticks(np.arange(len(sites)) + 0.5, ["color"] + [int(float(site)) for site in sites[1:]], rotation=90, size=20)
-    ax.xaxis.set_label_position('bottom')
-    ax.xaxis.set_ticks_position('bottom')
-    ax.set_ylabel("simulation cutoff (nm)", fontsize=20)
-    plt.yticks(np.arange(len(cutoffs)) + 0.5, [int(cutoff) for cutoff in cutoffs], size=20)
-    ax.invert_yaxis()
-    ax.patch.set_facecolor('white')
-    #for spine in ax.spines: ax.spines[spine].set_color('white')
-    cbar = fig.colorbar(ppMesh)
-    cbar.ax.text(0.55, 0.025, 'calling rate', rotation=90, ha='center', va='bottom', transform=cbar.ax.transAxes,
-                 fontsize=20, color='black')
-
-    fig.tight_layout()
-    # plt.show()
-    fig.set_size_inches(12, 10)
-    plt.savefig(outfile, transparent=True)
-    '''
-
-# a command line interface to make a heatmap from tsv files. If a directory full of files is passed,
-# all files in that dir will be averaged elementwise
-def main(argv, wayout):
-    if not len(argv):
-        argv.append('-h')
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description=__doc__)
-    parser.add_argument("-i", "--input", type=str, help="source of tsv file(s)", required=True)
-    parser.add_argument("-o", "--output", type=str, help="name of PDF output", required=True)
-
-    global args
-    args = parser.parse_args(argv)
-
-    # HFS+ - safe listdir() function
-    def listdirSafe(path):
-        # return sorted([path + '/' + f for f in os.listdir(path) if f[:2] != '._'])
-        return sorted([f for f in os.listdir(path) if f[:1] != '.'])
-
-    # take a list of DataFrames and average them elementwise
-    # use indices from the first df in the list
-    # requires numpy
-    def dfMean(dfList):
-        rows = dfList[0].index
-        cols = dfList[0].columns
-        matrixList = [df.values for df in dfList]
-
-        # sum the matrices elementwise
-        outMatrix = np.zeros_like(matrixList[0])
-        for matrix in matrixList:
-            outMatrix = np.add(outMatrix, matrix)
-
-        # divide to get the mean
-        outMatrix = outMatrix / len(matrixList)
-
-        # convert back to df and name the axes
-        outDf = pd.DataFrame(outMatrix)
-        outDf.index = rows
-        outDf.columns = cols
-
-        return outDf
-
-    # make heatmaps
-    if os.path.isdir(args.input):
-        # load all the dfs in the directory
-        infiles = [args.input + '/' + infile for infile in listdirSafe(args.input)]
-        dfs = [pd.read_table(infile, index_col=0) for infile in infiles]
-        # get elementwise mean df
-        meanDf = dfMean(dfs)
-        # draw heatmap
-        heatMapDF(meanDf, args.output, rainbow=True)
-        # print the averaged df
-        print >> wayout, meanDf.to_csv(sep='\t')
-    else:
-        heatMapDF(pd.read_table(args.input), args.output, rainbow=True)
-
-
-### draw a Manhattan plot of the summed PPs
-def manhattanPlot(df, outPath, keyID=None):
-    # at present this is meant to be run once
-    import matplotlib.pyplot as plt
-
+    # init plot
     fig, ax = plt.subplots()
     x = [i + 1 for i in range(len(df))]
-    y = np.array(df)
-    # y = np.array([-math.log10(p) for p in y]) # log-transform
+    y = np.array(df[pcocPP])
     xlimits = (min(x) - 0.5, max(x) + 0.5)
     plt.xlim(xlimits)
-    plt.xticks(x, x, rotation=90, fontsize=7)
-    plt.yticks(fontsize=20)
+    # set up tick interval
+    xTicks = [1] + range(xSpacing, max(x), xSpacing)
+    plt.xticks(xTicks, xTicks, fontsize=8, horizontalalignment='center')
+    plt.yticks(fontsize=8)
+    # label axes
+    ax.set_xlabel(xLabel, fontsize=20)
+    ax.set_ylabel("PCOC PP", fontsize=20)
 
-    if keyID:
-        ax.set_xlabel("position in " + keyID, fontsize=20)
+
+    if simErrorControl:
+        df = breakOutThresholds(df, alpha, beta)
+
+        # base colors for confidence windows
+        basecolorAlpha = (0.0, 0.5, 0.0) #green
+        basecolorBeta = (0.5, 0.0, 0.0) #red
+
+        # for each set of confidence thresholds
+        # (len(alpha) should = len(beta))
+        for i in range(len(alpha)):
+            # extract pair of confidence thresholds
+            ymin = np.array(df["alpha_"+str(alpha[i])])
+            ymax = np.array(df["beta_"+str(beta[i])])
+            # set the shade of the plot color
+            # comes within 0.8 of black
+            shader = np.array((1, 1, 1) * np.array([(1 - max(basecolorAlpha)) * 0.8 / len(alpha) * i] * 3))
+            # make masks for sites with and without enough data
+
+            # and plot them
+            plt.bar(x, bottom=ymin, height=(1 - ymin), width=0.8, color=tuple(np.array(basecolorAlpha) + shader), alpha=0.6, zorder=1)
+            plt.bar(x, bottom=0, height=ymax, width=0.8, color=tuple(np.array(basecolorBeta) + shader), alpha = 0.6, zorder=2)
+
+        # plot PCOC PPs
+        plt.bar(x, y, width=0.5, color="black", zorder=3)
+        #plt.scatter(x, y, s=400, color="black", zorder=3)
+
     else:
-        ax.set_xlabel("alignment column")
-    ax.set_ylabel("total PCOC PP", fontsize=20)
+        # constant threshold mode
+        if not blkBkgd:
+            colors = ["black", "red", "violet"]
+        else:
+            colors = ["white", "red", "violet"]
+        # plot horizontal PP thresholds
+        plt.hlines(thresholdsPP[:-1], xlimits[0], xlimits[1], colors=colors)
 
-    # pThresholds = (0, 0.8, 0.9, 0.95, 1)
-    # colors = ["black", "blue", "red", "violet"]
-    pThresholds = (0, 0.8, 1)
-    colors = ["white", (0, 1, 0.05)]  # for black bkgd
-    # colors = ["black", "blue"]  # for white bkgd
-    plt.hlines(pThresholds[:-1], xlimits[0], xlimits[1], colors=colors)
+        # for lin
+        # masks = [[pThresholds[i] >= el > pThresholds[i + 1] for el in y] for i in range(len(pThresholds) - 1)]
+        # for log
+        masks = np.array([[thresholdsPP[i] <= el < thresholdsPP[i + 1] for el in y] for i in range(len(thresholdsPP) - 1)])
+        # plot the bars in each color
+        for i, mask in enumerate(masks):
+            plt.bar(x * mask, y * mask, color=colors[i], width=0.7)
 
-    # for lin
-    # masks = [[pThresholds[i] >= el > pThresholds[i + 1] for el in y] for i in range(len(pThresholds) - 1)]
-    # for log
-    masks = np.array([[pThresholds[i] <= el < pThresholds[i + 1] for el in y] for i in range(len(pThresholds) - 1)])
-
-    for i, mask in enumerate(masks):
-        plt.bar(x * mask, y * mask, color=colors[i], width=1)
-
-    fig.set_size_inches(24, 8)
-    # plt.show()
+    # save the plot
+    fig.set_size_inches(width, height)
     plt.savefig(outPath)
 
-    # no return
+    return outPath
 
-if __name__ == "__main__":
-    # when called from command line, print results to stdout
-    main(sys.argv[1:], sys.stdout)
+### Draw an amino acid alignment with called columns and their trait cutoffs highlighted
+### Number of red asterisks drawn on the cutoff indicates level of significance
+def alignmentHighlighted(df, ali, tipTraits, outPath, highlightInconclusive = False, width=24, height=8):
+
+    fig, ax = ali2plt(ali)
+
+    # save the plot
+    fig.set_size_inches(width, height)
+    plt.savefig(outPath)
+
+    return outPath
+
+### Use a BioPython MSA object and embedded color scheme to plot an amino acid alignment
+### Uses plt.pcolormesh()
+def ali2plt(ali):
+
+    # color schemes
+    shapely = {
+        'D':  (230, 10, 10),
+        'E':  (230, 10, 10),
+        'C':  (230, 230, 0),
+        'M':  (230, 230, 0),
+        'K':  (20, 90, 255),
+        'R':  (20, 90, 255),
+        'S':  (250, 150, 0),
+        'T':  (250, 150, 0),
+        'F':  (50, 50, 170),
+        'Y':  (50, 50, 170),
+        'N':  (0, 220, 220),
+        'Q':  (0, 220, 220),
+        'G':  (235, 235, 235),
+        'L':  (15, 130, 15),
+        'V':  (15, 130, 15),
+        'I':  (15, 130, 15),
+        'A':  (200, 200, 200),
+        'W':  (180, 90, 180),
+        'H':  (130, 130, 210),
+        'P':  (220, 150, 130)
+    }
+
+    # convert alignment object to array
+    aliArray = np.array(ali)
+    print aliArray
+    # generate color mask
+    #colorMask = np.apply(shapely.__getitem__, aliArray)
+    #colorMask = np.vectorize(shapely.__getitem__)(aliArray)
+    colorMask = [[None] * aliArray.shape[1]] * aliArray.shape[0]
+    # doing this manually because vectorize trips on the returned tuples
+    for i, row in enumerate(aliArray):
+        for j, el in enumerate(row):
+            colorMask[i][j] = shapely[el]
+    print colorMask
+
+    # init plot
+    fig, ax = plt.subplots()
+    # draw alignment
+    plt.pcolormesh(aliArray)
+
+    return fig, ax
+
+
+### Helper function to unpack lists of confidence thresholds into their own columns in the dataframe
+def breakOutThresholds(df, alpha, beta):
+    # split out the significance threshold lists
+    df[["alpha_" + str(thres) for thres in alpha]] = pd.DataFrame(df.PP_Threshold_TypeI.tolist(), index=df.index)
+    df[["beta_" + str(thres) for thres in beta]] = pd.DataFrame(df.PP_Threshold_TypeII.tolist(), index=df.index)
+
+    return df

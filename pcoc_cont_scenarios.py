@@ -43,8 +43,11 @@ import subprocess
 import datetime
 import numpy as np
 import pandas as pd
+import scipy.stats as stat
 from ast import literal_eval
 from ete3 import Tree, NodeStyle, TreeStyle, TextFace, CircleFace
+from shutil import rmtree
+from time import sleep
 from pprint import pprint
 from Bio import AlignIO
 
@@ -87,7 +90,9 @@ def parse_args(argv):
     Options.add_argument('--det', action="store_true", help="Set to actually run pcoc_det.py")
     Options.add_argument('--sim', action="store_true", help="Set to run post hoc simulation")
     Options.add_argument('--sim_pp_thres', type=float, default=0.8, help="Set PCOC PP threshold for running a post hoc simulation, 0.0001 = all sites")
-    Options.add_argument('--sim_alpha_vals', type=float, nargs='*', default=[0.10, 0.05, 0.01], help="alpha values to test in post hic simulations")
+    Options.add_argument('--sim_alpha_vals', type=float, nargs='*', default=[0.10, 0.05, 0.01], help="alpha values to test in post hoc simulations")
+    Options.add_argument('--sim_beta_vals', type=float, nargs='*', default=[0.6, 0.8, 0.9], help="beta values to test in post hoc simulations")
+    Options.add_argument('--sim_no_cleanup', action="store_true", help="Set to retain all the sequence sim and error estimation siles")
     Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
     Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
     Options.add_argument('-hm', '--heatmap', type=str,
@@ -165,27 +170,30 @@ def parse_args(argv):
     simParser = argparse.ArgumentParser(prog="pcoc_sim.py", description='optional args to pass to pcoc_sim.py')
     simOptions = simParser.add_argument_group('Arguments for simulation-based error control')
 
-    simOptions.add_argument('-nb_sampled_couple', type=int, metavar="INT",
-                             help="For each convergent scenario, number of simulated alignment with different sampled couple of profiles (Ancestral/Convergent). (default: 1)",
-                             default=1)
+    #simOptions.add_argument('-nb_sampled_couple', type=int, metavar="INT",
+    #                         help="For each convergent scenario, number of simulated alignment with different sampled couple of profiles (Ancestral/Convergent). (default: 1)",
+    #                         default=1)
     simOptions.add_argument('-n_sites', type=int, metavar="INT",
                              help="Number of simulated sites per alignment. (default: 1000)",
-                             default=1000)
-    #simOptions.add_argument('-CATX_sim', type=int, choices=[10, 60],
-    #                         help="Profile categories to simulate data (10->C10 or 60->C60). (default: 10)",
-    #                         default=10)
+                             default=100)
+    simOptions.add_argument('-CATX_sim', type=int, choices=[10, 60],
+                             help="Profile categories to simulate data (10->C10 or 60->C60). (default: set by det)",
+                             default=detArgs.CATX_est)
     simOptions.add_argument('-min_dist_CAT', type=float, metavar="FLOAT",
                              help="Minimum distance between Ancestral and Convergent profiles to simulate the alignment (default: no limits)",
                              default=0)
-    simOptions.add_argument('--plot_ali', action="store_true",
-                             help="For each couple of profiles, plot a summary of the convergent scenario containing the tree and the alignment.",
-                             default=False)
-    simOptions.add_argument('--get_likelihood_summaries', action="store_true",
-                             help="For each couple of profiles, write a summary of the likelihoods per site.",
-                             default=False)
-    simOptions.add_argument('--no_clean_seqs', action="store_true",
-                             help="Do not cleanup the sequences after the run.",
-                             default=False)
+    simOptions.add_argument('-c_min', type=int, metavar="INT",
+                               help="Minimum number of transition (=convergent events). (default: 2)",
+                               default=2)
+    #simOptions.add_argument('--plot_ali', action="store_true",
+    #                         help="For each couple of profiles, plot a summary of the convergent scenario containing the tree and the alignment.",
+    #                         default=False)
+    #simOptions.add_argument('--get_likelihood_summaries', action="store_true",
+    #                         help="For each couple of profiles, write a summary of the likelihoods per site.",
+    #                         default=False)
+    #simOptions.add_argument('--no_clean_seqs', action="store_true",
+    #                         help="Do not cleanup the sequences after the run.",
+    #                         default=False)
 
     # parse the above and leave remaining argv for det
     simArgs, detArgv = simParser.parse_known_args(passthruArgv)
@@ -257,6 +265,8 @@ def main(contArgs, detArgv, simArgs, simArgv):
     binDF = convergentRootFilter(binDF)
     # convert binary dataframe into scenario strings
     scenarios = scenarioStrings(binDF, tree)
+    # remove scenarios with too few convergent events
+    scenarios = minTransitionsFilter(scenarios, simArgs.c_min)
 
     scenDir = contArgs.output + "/Scenarios"
     simDir = contArgs.output + "/Simulations"
@@ -385,67 +395,91 @@ def main(contArgs, detArgv, simArgs, simArgv):
         # iterate over the sites and assign profiles and model lnLs to each
         for site in range(simDf.shape[0]):
             # if the site made the cut for simulation
-            if simDf["PP_Max"].tolist()[site] >= contArgs.sim:
+            if simDf["PP_Max"].tolist()[site] >= contArgs.sim_pp_thres:
                 # get the profiles and the model lnL and tack them on the row
-                simDf.loc[site + 1, "CAT_Anc"], simDf.loc[site + 1, "CAT_Con"], simDf.loc[site + 1, "lnL_PCOC"] = getMLCATProfiles(site, lnLMatricesPCOC[cutoff])
+                simDf.loc[site + 1, "CAT_Anc"], simDf.loc[site + 1, "CAT_Con"], simDf.loc[site + 1, "lnL_PCOC"] = getMLCATProfiles(site, lnLMatricesPCOC[simDf["Cutoff"].tolist()[site]])
                 #simDf.loc[site + 1, "CAT_Anc_PC"], simDf.loc[site + 1, "CAT_Con_PC"], simDf.loc[site + 1, "lnL_PC"] = getMLCATProfiles(site, lnLMatricesPC[cutoff])
 
         # display profile numbers as ints in the table
         # but this crashes when there are NaNs :/
-        #simDf["CAT_Anc"] = simDf["CAT_Anc"].astype(float)
-        #simDf["CAT_Con"] = simDf["CAT_Con"].astype(float)
+        #simDf["CAT_Anc"] = simDf["CAT_Anc"].astype(int)
+        #simDf["CAT_Con"] = simDf["CAT_Con"].astype(int)
 
-        postHocFilename = os.path.splitext(contArgs.master_table)[0] + "_posthoc.tsv"
-        simDf.to_csv(postHocFilename, sep='\t')
+        #postHocFilename = os.path.splitext(contArgs.master_table)[0] + "_posthoc.tsv"
+        #simDf.to_csv(postHocFilename, sep='\t')
+
+        print simDf
 
         # make a list of the different error curves required
         # this amounts to the unique rows of simDf, less the lnL column
-        uniqueSims = simDf.dropna().reset_index()[["Cutoff", "CAT_Anc", "CAT_Con"]].drop_duplicates()
-        # get a column of scenario strings
+        uniqueSims = simDf.dropna()[["Cutoff", "CAT_Anc", "CAT_Con"]].drop_duplicates().reset_index(drop = True)
+        # Not sure whether this is necessary: convert the profiles to ints for merging (the NaNs are gone!)
+        uniqueSims["CAT_Anc"] = uniqueSims["CAT_Anc"].astype(int)
+        uniqueSims["CAT_Con"] = uniqueSims["CAT_Con"].astype(int)
+        # add a column of scenario strings
         uniqueSims["Scenario"] = [scenarios[cutoff] for cutoff in uniqueSims["Cutoff"].tolist()]
 
+        #print "unique required sims"
+        #print uniqueSims
+
+        empty = contArgs.output + "/empty"
+
+        pickleDir = os.path.join(simDir, "Pickles")
+
         # load all the available error curves into a DataFrame: metadata mapped to list of confidence thresholds
-        availSims = loadSavedSims(simDir, tree_newick, simArgs.__dict__, alpha = contArgs.sim_alpha)
+        availSims = loadSavedSims(pickleDir, tree_newick, simArgs, alpha = contArgs.sim_alpha_vals, beta = contArgs.sim_beta_vals)
+        #print "available sims"
+        #print availSims
 
         # left-join those to the table of unique required sims
-        uniqueSims = pd.merge(uniqueSims, availSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
+        uniqueSims = pd.merge(uniqueSims, availSims, how='left', on=["Scenario", "CAT_Anc", "CAT_Con"])
+        # and if there are multiple pickles appropriate for each scenario, use only the freshest ones
+        uniqueSims.drop_duplicates(subset = ["Scenario", "CAT_Anc", "CAT_Con"], keep = "last", inplace = True)
+        #print "sims recovered from picklejar"
+        #print uniqueSims
 
         # get rows for sims that still need to be run
-        newSims = uniqueSims.loc[uniqueSims["PP_Threshold"].isnull()]
+        newSims = uniqueSims.loc[uniqueSims["PP_Threshold_TypeI"].isnull()]
         # run them and update the table with confidence thresholds
-        newSims = runSiteSims(newSims, contArgs, simArgv, simDir, simArgs)
+        #print "missing sims"
+        newSims = runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = contArgs.sim_alpha_vals, beta = contArgs.sim_beta_vals)
+        #print newSims
+        uniqueSims = mergeFillNans(uniqueSims, newSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con", "Scenario"], positiveType=list)
+        #print uniqueSims
 
         # left-join the unique sims table to the sitewise table
-        uniqueSims = pd.merge(uniqueSims, newSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
+        plotDf = pd.merge(simDf, uniqueSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
 
+        # replace NaNs in threshold cols with empty list
+        for row in plotDf.loc[plotDf.PP_Threshold_TypeI.isnull(), 'PP_Threshold_TypeI'].index:
+            plotDf.at[row, 'PP_Threshold_TypeI'] = []
+            plotDf.at[row, 'PP_Threshold_TypeII'] = []
+        print plotDf
 
-    if contArgs.heatmap:
+    #if contArgs.heatmap:
+    if False:
         #print >> sys.stderr, "# MESSAGE: Drawing heatmap:"
         # Make a heatmap figure. Graphics parameters are all set in `pcoc_cont_heatmap.py`
         heatmapPath = contArgs.output + '/' + contArgs.heatmap
         rainbow = True  # Is the trait in question a visible wavelength to be plotted chromatically?
-        pviz.heatMapDF(heatmapDf, heatmapPath, rainbow=rainbow)
+        #pviz.heatMapDF(heatmapDf, heatmapPath, rainbow=rainbow)
         # tell user where it was put
         #print >> sys.stderr, heatmapPath
         logger.info("Drawing heatmap at {}".format(heatmapPath))
 
     if contArgs.manhattan:
 
-        ### Sum columns of non-exclusive probabilities
-        def sumProbs(probArray):
-            # the array casting is important, because numpy uses the operators element-wise
-            sums = np.array([0.] * probArray.shape[1])
-            for row in probArray:
-                sums = sums + np.array(row) - (sums * np.array(row))
-            return sums
-
-        #print >> sys.stderr, "# MESSAGE: Drawing Manhattan plot:"
-        manhattanSeries = sumProbs(np.array(heatmapDf))  # convert to array
         manhattanPath = contArgs.output + '/' + contArgs.manhattan
-        pviz.manhattanPlot(manhattanSeries, manhattanPath, contArgs.key_seq)
+        #pviz.manhattanPlot(manhattanSeries, manhattanPath, contArgs.key_seq)
+        pviz.manhattanPlot(plotDf, manhattanPath, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals)
+
         # tell user where it was put
         #print >> sys.stderr, manhattanPath
         logger.info("Drawing Manhattan plot at {}".format(manhattanPath))
+
+        alignPath = contArgs.output + "test_MSA.pdf"
+        ali = AlignIO.read(contArgs.aa_align, "fasta")
+        pviz.alignmentHighlighted(plotDf, ali, [], alignPath)
 
     if contArgs.master_table:
         #print >> sys.stderr, "# MESSAGE: Saving master table of results:"
@@ -654,11 +688,9 @@ def convergentRootFilter(binDF):
     binDF.drop(labels = convergentCutoffs, axis = 1, inplace = True)
 
     # notify user of outcome of root filter
-    #print >> sys.stderr, "# MESSAGE: {}/{} scenarios eliminated due to convergent root:".format(len(convergentCutoffs), len(origCutoffs))
     logger.info("{}/{} scenarios eliminated due to convergent root:\n{}".format(len(convergentCutoffs), len(origCutoffs), convergentCutoffs))
 
     if len(convergentCutoffs) >= len(origCutoffs) / 2:
-        #print >> sys.stderr, "# WARNING: Consider inverting your trait!"
         logger.warning("Consider inverting your trait!")
 
     return binDF
@@ -690,6 +722,19 @@ def scenarioStrings(binDF, tree):
 
     # return dict with cutoff: scenarioString
     return scenarios
+
+
+### Remove and report on scenarios that have less than the specified number of convergent events
+def minTransitionsFilter(scenarios, minEvents):
+
+    wheat = {key: value for key, value in scenarios.iteritems() if (value.count('/') + 1) >= minEvents}
+    chaff = {key: value for key, value in scenarios.iteritems() if (value.count('/') + 1) < minEvents}
+
+    # notify user of filter action
+    logger.info("{}/{} scenarios eliminated due to fewer than {} convergent events:\n{}".format(len(chaff), len(scenarios), minEvents, sorted(chaff.keys())))
+
+    return wheat
+
 
 def scenarioString2Dict(scenarioString):
     manual_mode_nodes = {"T": [], "C": []}
@@ -786,43 +831,74 @@ def getMLCATProfiles(site, lnLs):
     return profileA + 1, profileC + 1, lnL
 
 # search directory for all pickled error curves generated using the specified .__dict__ of args
-def loadSavedSims(simDir, tree, simArgs, alpha = [0.10, 0.05, 0.01]):
+def loadSavedSims(pickleDir, tree_newick, simArgs, alpha = [0.10, 0.05, 0.01], beta = [0.6, 0.8, 0.9]):
 
-    simsCatalog = pd.DataFrame(columns = ["Scenario", "CAT_Anc", "CAT_Con", "PP_Threshold"])
-
-    # paw thru all the files in the sim directory
-    for file in os.listdir(simDir):
+    # paw thru all the pickles in the jar
+    files = os.listdir(pickleDir)
+    # init list of DF rows. Cannot know length b/c don't know how many of the sim files are valid.
+    rows = list()
+    for file in files:
         curveParser = configparser.RawConfigParser()
-        curveParser.read(file)
+        for sname in ["sim_args", "sim_input", "sim_output"]:
+            curveParser.add_section(sname)
+        curveParser.readfp(open(os.path.join(pickleDir, file), 'r'))
+
         # check that all pickled pcoc_sim [static] args are same or better than specified
         # this should take a dict coming from parse_args(), not the argv that actually went to the pcoc_sim call
-        if (all([curveParser.get("sim_args", key) >= value for key, value in simArgs]) and
-            curveParser.get("tree", "newick") == tree):
+        pickleCheckList = list()
+        for key, value in simArgs.__dict__.items():
+            try:
+                pickleCheckList.append(curveParser.getint("sim_args", key) >= value)
+            except:
+                # if one of the passed options is not stored in the pickle
+                logger.warning("{} is not in pickle {}!\nproceeding...".format(key, file))
+                pickleCheckList.append(True)
+                pass
+
+        if (all(pickleCheckList) and curveParser.get("sim_input", "tree_newick") == tree_newick):
+            # init DataFrame row
+            row = pd.Series()
             # load it up! (from dict)
-            errorCurve = literal_eval(curveParser.get("sim_output", "error_curve"))
+            errorCurveTypeI = literal_eval(curveParser.get("sim_output", "error_curve_type1"))
             # get the PP values corresponding to passed levels of alpha
-            simsCatalog["PP_Threshold"].append(getConfThresholds(errorCurve, alpha))
+            row.at["PP_Threshold_TypeI"] = getConfThresholds(errorCurveTypeI, alpha)
+            errorCurveTypeII = literal_eval(curveParser.get("sim_output", "error_curve_type2"))
+            # get the PP values corresponding to passed levels of alpha
+            row.at["PP_Threshold_TypeII"] = sorted(getConfThresholds(errorCurveTypeII, beta), reverse = True)
             # get dynamic sim metadata
-            simsCatalog["Scenario"].append(curveParser.get("sim_input", "scenario"))
-            simsCatalog["CAT_Anc"].append(curveParser.get("sim_input", "CAT_Anc"))
-            simsCatalog["CAT_Con"].append(curveParser.get("sim_input", "CAT_Con"))
+            row["Scenario"] = curveParser.get("sim_input", "scenario")
+            row["CAT_Anc"] = curveParser.getint("sim_input", "profile_anc")
+            row["CAT_Con"] = curveParser.getint("sim_input", "profile_con")
+            rows.append(row.to_frame(1).T)
+
+    # concat the series into a DF
+    if len(rows):
+        simsCatalog = pd.concat(rows, ignore_index = True)
+    else:
+        # empty default DF
+        simsCatalog = pd.DataFrame(columns=["Scenario", "CAT_Anc", "CAT_Con", "PP_Threshold_TypeI", "PP_Threshold_TypeII"])
 
     return simsCatalog
 
 # run simulations as requested in the passed pd.DataFrame()
-def runSiteSims(newSims, contArgs, simArgv, simDir, simArgs):
+def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = [0.10, 0.05, 0.01], beta = [0.6, 0.8, 0.9]):
 
-    #["Scenario", "CAT_Anc", "CAT_Con", "PP_Threshold"]
-    # system environment-type stuff
-    # location of the modified version of pcoc_sim.py that accepts manual profile specification
-    modifiedPCOCSim = os.path.abspath(os.path.join(os.path.realpath(__file__), '..'))
-    modifiedPCOCSim = os.path.join(modifiedPCOCSim, "pcoc_sim_manual.py")
-    #
+    dateTime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    tree = init_tree(contArgs.tree)
+    tree_newick = tree.write()
+
+    #["Scenario", "CAT_Anc", "CAT_Con", "PP_Threshold_TypeI"]
+    # location of the modified version of pcoc_sim.py
+    # it accepts manual profile specification and a single tree path
+    cwd = os.path.abspath(os.path.join(os.path.realpath(__file__), '..'))
+    modifiedPCOCSim = os.path.join(cwd, "pcoc_sim_manual.py")
 
     # set args that are the same for all sims
     simArgvStatic = [modifiedPCOCSim,
-                     "-t", contArgs.tree,
-                     "-o", simDir] + simArgv  # add additional site-detect args from command line
+                     "-td", contArgs.tree,
+                     #"-o", simDir,
+                     #"--pcoc",
+                     "--no_clean_seqs"] + simArgv  # add additional site-detect args from command line
     # error will be thrown if any of these are specified redundantly at the command line
 
     # SIMULATE LOOP #
@@ -830,31 +906,154 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, simArgs):
     numSims = newSims.shape[0]
     logger.info("Running {} new post hoc simulations...".format(numSims))
 
-    for i, row in enumerate(newSims.iterrows()):
-        logger.info("convergent scenario {}/{}: scenario: {}".format(i, numSims, str(row["Scenario"])))
+    for i, row in newSims.iterrows():
+        profileA = int(row["CAT_Anc"])
+        profileC = int(row["CAT_Con"])
+        scenStr = row["Scenario"]
+        simIDStr = "A{}_C{}_{}".format(profileA, profileC, scenStr)
+        logger.info("Simulation {}/{}: {}".format(i+1, numSims, simIDStr))
+
+        # sanitize simulation identifier for use as a directory name
+        # it might later be necessary to just call the directory "Sim_i"
+        # if the dirnames get too long
+        #simIDStr = simIDStr.replace('/', '_').replace(',', "-")
+        simIDStr = "sim_{}_{}".format(i, dateTime)
+        # make output dir
+        simOutDir = os.path.join(simDir, simIDStr)
+        try:
+            os.mkdir(simOutDir)
+        except:
+            pass
+
+        # make pickle dir
+        try:
+            os.mkdir(pickleDir)
+        except:
+            pass
+
         simArgvDynamic = simArgvStatic + [
+            "-o", simOutDir,
             "-m", str(row["Scenario"]),
-            "--profile_a", str(row["CAT_Anc"]),
-            "--profile_a", str(row["CAT_Con"]),
+            "-m_sampled_couple", str(profileA), str(profileC),
             ]
 
-        # run pcoc.det.py
+        # simulate the alignment
         subprocess.call(simArgvDynamic)
-        # END DETECT LOOP #
 
+        # detect on both NEGATIVE, POSITIVE algts for Type I, II error
+        detArgvStatic = ["pcoc_det.py",
+                         "-f", "-1",
+                         ]
+
+        # a clumsy way to make sure detect results don't end up in the sim directory:
+        sleep(1)
+        for type, profileC in enumerate((int(row["CAT_Anc"]), int(row["CAT_Con"]))):
+            # retrieve the simulated alignment
+            simAlgtPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[0], "Tree_1/sequences/Scenario_1",
+                                       "Scenario_1_A{}_C{}.fa".format(profileA, profileC))
+
+            # set up detection on the simulated NEGATIVE alignment
+            detArgvDynamic = detArgvStatic + [
+                       "-t", contArgs.tree,
+                       "-aa", simAlgtPath,
+                       "-o", simOutDir,
+                       "-m", str(row["Scenario"]),
+                             ] + detArgv # add additional site-detect args from command line
+            # error will be thrown if any of these are specified redundantly at the command line
+
+            subprocess.call(detArgvDynamic)
+
+        # retrieve FPR results table (2nd-latest run)
+        simResultsTypeIPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[1], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileA))
+        simResultsTypeI = pd.read_table(simResultsTypeIPath)
+
+        # generate an error curve from it
+        errorCurveTypeI = genErrorCurve(simResultsTypeI["PCOC"], 0b0)
+
+        # retrieve FNR results table (latest run)
+        simResultsTypeIIPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[2], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileC))
+        simResultsTypeII = pd.read_table(simResultsTypeIIPath)
+
+        # generate an error curve from it
+        errorCurveTypeII = genErrorCurve(simResultsTypeII["PCOC"], 0b1)
+
+        # and pickle it in a file
+        picklePath = os.path.join(pickleDir, simIDStr + ".conf")
+        pickleErrorCurve(errorCurveTypeI, errorCurveTypeII, simArgs, tree_newick, (profileA, profileC), row["Scenario"], picklePath)
+
+        # get confidence thresholds and add them to newSims DF
+        #newSims.iloc[i, newSims.columns.get_loc("PP_Threshold_TypeI")] = getConfThresholds(errorCurveTypeI, alpha)
+        # .at[] allows insertion of a list into DF
+        newSims.at[i, "PP_Threshold_TypeI"] = getConfThresholds(errorCurveTypeI, alpha)
+        newSims.at[i, "PP_Threshold_TypeII"] = sorted(getConfThresholds(errorCurveTypeII, beta), reverse = True)
+
+        if not contArgs.sim_no_cleanup:
+            # delete all sim files besides the error curve
+            rmtree(simOutDir)
+
+    # END SIMULATE LOOP #
+
+    # return the completed sim table
     return newSims
+
+# take a series of PPs from a simulated alignment, and an error-type argument for whether the sites
+# _should_ all call high or low (0b0 -> type I error, should all call low; 0b1 -> type II error, should all call high)
+# return error rate:PP as key:value pairs
+def genErrorCurve(ppSeries, errType):
+    # coerce passed PPs to list and order it
+    ppSeries = sorted(list(ppSeries))
+
+    errorCurve = {}
+
+    if errType == 0b0:
+        for pp in ppSeries:
+            # get the fraction of sites _above or equal to_ that PP value
+            errorCurve[pp] = (100 - stat.percentileofscore(ppSeries, pp, kind="strict")) / 100
+    elif errType == 0b1:
+        for pp in ppSeries:
+            # get the fraction of sites _below or equal to_ that PP value
+            errorCurve[pp] = stat.percentileofscore(ppSeries, pp, kind="weak") / 100
+
+    return errorCurve
+
+def pickleErrorCurve(errorCurveTypeI, errorCurveTypeII, simArgs, tree_newick, profiles, scenario, filename):
+
+    # init config parser to which curve and metadata will be stored
+    curveParser = configparser.RawConfigParser()
+    for sname in ["sim_args", "sim_input", "sim_output"]:
+        curveParser.add_section(sname)
+
+    # store sim args (including default ones)
+    for key, value in simArgs.__dict__.items():
+        curveParser.set("sim_args", key, value)
+
+    # store tree Newick
+    curveParser.set("sim_input", "tree_newick", tree_newick)
+    # store convergent scenario
+    curveParser.set("sim_input", "scenario", scenario)
+    # store profiles
+    curveParser.set("sim_input", "profile_anc", profiles[0])
+    curveParser.set("sim_input", "profile_con", profiles[1])
+
+    # store error curve
+    curveParser.set("sim_output", "error_curve_type1", errorCurveTypeI)
+    curveParser.set("sim_output", "error_curve_type2", errorCurveTypeII)
+
+    with open(filename, 'w') as handle:
+        curveParser.write(handle)
+
+    return filename
 
 # take an error curve (dict form) and set of alpha values
 # return the PP thresholds for those alpha values
-def getConfThresholds(errorCurve, alpha):
+def getConfThresholds(errorCurve, errorRates):
 
     # sort the alpha values descending
-    alpha = sorted(alpha, reversed=True)
-
-    ppThresholds = [None] * len(alpha)
+    errorRates = sorted(errorRates, reverse=True)
+    ppThresholds = [None] * len(errorRates)
     i = 0
-    for key, value in errorCurve:
-        if value <= alpha[i] and i < len(alpha):
+    for key in sorted(errorCurve.keys()):
+        if i < len(errorRates) and errorCurve[key] <= errorRates[i]:
             ppThresholds[i] = key
             i += 1
 
@@ -879,6 +1078,22 @@ def keyAlignmentColumns(algt, keySeqID):
 
     return mappedCols
 
+### Utility function that does a merge, then consolidates duplicated columns.
+### It does this by choosing the first truthy value in the pair of columns for each row.
+def mergeFillNans(left, right, positiveType = list, **kwargs):
+
+    merged = pd.merge(left, right, **kwargs)
+    dupedColumns = [colname[:-2] for colname in merged.columns if "_x" in colname]
+
+    for colname in dupedColumns:
+        colnamex = colname + "_x"
+        colnamey = colname + "_y"
+        # make a new column with just the non-null values
+        merged[colname] = merged[[colnamex, colnamey]].apply(lambda row: next(item for item in row if isinstance(item, positiveType)), axis=1)
+        # drop the unconsolidated columns
+        merged.drop([colnamex, colnamey], axis=1, inplace=True)
+
+    return merged
 
 ### Number tree nodes for consistent reference
 def init_tree(nf):
@@ -890,5 +1105,5 @@ def init_tree(nf):
     return t
 
 if __name__ == "__main__":
-    contArgs, detArgv, simArgv = parse_args(sys.argv)
-    main(contArgs, detArgv, simArgv)
+    contArgs, detArgv, simArgs, simArgv = parse_args(sys.argv)
+    main(contArgs, detArgv, simArgs, simArgv)

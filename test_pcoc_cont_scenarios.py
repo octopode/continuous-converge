@@ -234,3 +234,15 @@ def disabled_test_det_mk_detect():
     output = target.pd.DataFrame.from_dict(outDict).sort_index(axis=1)
 
     assert target.det.mk_detect(manual_mode_nodes, tree_filename, ali, *tempDirs).sort_index(axis=1).equals(output)
+
+def test_mergeFillNans():
+
+    input1 = [{'A': [1,2,3], 'B':"fe"}, {'A': [4,5,6], 'B':"fi"}, {'A': target.np.nan, 'B':"fo"}]
+    input1 = target.pd.DataFrame(input1)
+    input2 = [{'A': target.np.nan, 'B':"fe"}, {'A': target.np.nan, 'B':"fi"}, {'A': [7,8,9], 'B':"fo"}]
+    input2 = target.pd.DataFrame(input2)
+
+    output = [{'A': [1,2,3], 'B':"fe"}, {'A': [4,5,6], 'B':"fi"}, {'A': [7,8,9], 'B':"fo"}]
+    output = target.pd.DataFrame(output)[['A', 'B']] # establish column order; matters for assertion
+
+    assert target.mergeFillNans(input1, input2, on=['B'])[['A', 'B']].equals(output)
