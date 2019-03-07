@@ -95,7 +95,7 @@ def parse_args(argv):
     Options.add_argument('--sim_no_cleanup', action="store_true", help="Set to retain all the sequence sim and error estimation siles")
     Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
     Options.add_argument('-fig', '--figure', type=int, default=None, help="Figure elements to output. 0 -> Manhattan with alignment; 1 -> Manhattan; 2 -> Shaded alignment")
-    #Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
+    Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
     #Options.add_argument('-hm', '--heatmap', type=str,
     #                     help="Render heatmap from the latest available set of data and save it here")
     #Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot at...")
@@ -473,50 +473,22 @@ def main(contArgs, detArgv, simArgs, simArgv):
         # left-join the unique sims table to the sitewise table
         plotDf = pd.merge(simDf, uniqueSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
 
-    '''
-    if contArgs.heatmap:
-        #print >> sys.stderr, "# MESSAGE: Drawing heatmap:"
-        # Make a heatmap figure. Graphics parameters are all set in `pcoc_cont_heatmap.py`
-        heatmapPath = contArgs.output + '/' + contArgs.heatmap
-        rainbow = True  # Is the trait in question a visible wavelength to be plotted chromatically?
-        #pviz.heatMapDF(heatmapDf, heatmapPath, rainbow=rainbow)
-        # tell user where it was put
-        #print >> sys.stderr, heatmapPath
-        logger.info("Drawing heatmap at {}".format(heatmapPath))
-    '''
-
-    '''
-    if contArgs.manhattan:
-
-        manhattanPath = contArgs.output + '/' + contArgs.manhattan
-        #pviz.manhattanPlot(manhattanSeries, manhattanPath, contArgs.key_seq)
-        pviz.manhattanPlot(plotDf, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals, outPath=manhattanPath)
-
-        # tell user where it was put
-        #print >> sys.stderr, manhattanPath
-        logger.info("Drawing Manhattan plot at {}".format(manhattanPath))
-
-        alignPath = os.path.join(contArgs.output, "test_MSA.pdf")
-        ali = AlignIO.read(contArgs.aa_align, "fasta")
-        pviz.alignmentHighlighted(plotDf, ali, tipTraits, outPath=alignPath)
-        pviz.masterFigure(plotDf, ali, tipTraits, elements=0, outPath=alignPath, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals)
-    '''
-
     # draw the requested kind of figure
     if contArgs.figure is not None:
         aliBasename = os.path.splitext(os.path.basename(contArgs.aa_align))[0]
-        figPath = os.path.join(contArgs.output, aliBasename + ".pdf")
+        figPath = os.path.join(contArgs.output, aliBasename + "_figure.pdf")
         ali = AlignIO.read(contArgs.aa_align, "fasta")
         # draw master figure
         pviz.masterFigure(plotDf, ali, tipTraits, elements=contArgs.figure, outPath=figPath, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals)
+        logger.info("Figure saved at {}".format(figPath))
 
+    # output collated data.
     if contArgs.master_table:
-        #print >> sys.stderr, "# MESSAGE: Saving master table of results:"
         # Print master data table. Note that it is transpose of the table sent to heatMapDF()
-        metaDfWide.to_csv(contArgs.master_table, sep='\t')
+        #metaDfWide.to_csv(contArgs.master_table, sep='\t')
+        plotDf.to_csv(contArgs.master_table, sep='\t')
         # tell user where it was put
-        #print >> sys.stderr, contArgs.master_table
-        logger.info("Saving master table of results at {}".format(contArgs.master_table))
+        logger.info("Table of results saved at {}".format(contArgs.master_table))
 
 ## HELPER FUNCTIONS ##
 
