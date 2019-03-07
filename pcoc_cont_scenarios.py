@@ -94,10 +94,11 @@ def parse_args(argv):
     Options.add_argument('--sim_beta_vals', type=float, nargs='*', default=[0.6, 0.8, 0.9], help="beta values to test in post hoc simulations")
     Options.add_argument('--sim_no_cleanup', action="store_true", help="Set to retain all the sequence sim and error estimation siles")
     Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
-    Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
-    Options.add_argument('-hm', '--heatmap', type=str,
-                         help="Render heatmap from the latest available set of data and save it here")
-    Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot at...")
+    Options.add_argument('-fig', '--figure', type=int, default=None, help="Figure elements to output. 0 -> Manhattan with alignment; 1 -> Manhattan; 2 -> Shaded alignment")
+    #Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
+    #Options.add_argument('-hm', '--heatmap', type=str,
+    #                     help="Render heatmap from the latest available set of data and save it here")
+    #Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot at...")
     Options.add_argument('-d', '--debug', action="store_true", help="debug mode")
 
     # parse the above from command line
@@ -194,6 +195,24 @@ def parse_args(argv):
     #simOptions.add_argument('--no_clean_seqs', action="store_true",
     #                         help="Do not cleanup the sequences after the run.",
     #                         default=False)
+    simOptions.add_argument('-flg', type=float, metavar="FLOAT",
+                               help="For each input tree, branch length multiplicator. (default: no modification)",
+                               default=1)
+    simOptions.add_argument('-bl_new', metavar="FLOAT", type=float,
+                               help="For each input tree, replace all branch lengths by [FLOAT]. (default: no modification)",
+                               default=-1)
+    simOptions.add_argument('--ali_noise', action="store_true",
+                               help="Add noisy events in the convergent scenario.",
+                               default=False)
+    simOptions.add_argument('--bl_noise', action="store_true",
+                               help="Add noise in the branch lengths of of tree for the detection process.",
+                               default=False)
+    #simOptions.add_argument('--ev_noise', choices=["+1", "-1", "=1"],
+    #                           help="Add noise in the event placing for the detection process. +1 to add an event,  -1 to remove one, =1 to change one. -c must be fix.",
+    #                           default=False)
+    simOptions.add_argument('--root_noise', choices=["ll", "lr", "rr", "rl"],
+                               help="Add noise in the root placing for the detection process. ll to move the root 2 nodes left, lr to move the root 1 node left and 1 node right, ...",
+                               default=False)
 
     # parse the above and leave remaining argv for det
     simArgs, detArgv = simParser.parse_known_args(passthruArgv)
@@ -443,21 +462,19 @@ def main(contArgs, detArgv, simArgs, simArgv):
         # run them and update the table with confidence thresholds
         #print "missing sims"
         newSims = runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = contArgs.sim_alpha_vals, beta = contArgs.sim_beta_vals)
-        #print newSims
-        uniqueSims = mergeFillNans(uniqueSims, newSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con", "Scenario"], positiveType=list)
-        #print uniqueSims
+
+        # replace NaNs in threshold cols with empty list
+        for row in uniqueSims.loc[uniqueSims.PP_Threshold_TypeI.isnull(), 'PP_Threshold_TypeI'].index:
+            uniqueSims.at[row, 'PP_Threshold_TypeI'] = []
+            uniqueSims.at[row, 'PP_Threshold_TypeII'] = []
+        
+        uniqueSims = mergeFillNans(uniqueSims, newSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con", "Scenario"])
 
         # left-join the unique sims table to the sitewise table
         plotDf = pd.merge(simDf, uniqueSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
 
-        # replace NaNs in threshold cols with empty list
-        for row in plotDf.loc[plotDf.PP_Threshold_TypeI.isnull(), 'PP_Threshold_TypeI'].index:
-            plotDf.at[row, 'PP_Threshold_TypeI'] = []
-            plotDf.at[row, 'PP_Threshold_TypeII'] = []
-        print plotDf
-
-    #if contArgs.heatmap:
-    if False:
+    '''
+    if contArgs.heatmap:
         #print >> sys.stderr, "# MESSAGE: Drawing heatmap:"
         # Make a heatmap figure. Graphics parameters are all set in `pcoc_cont_heatmap.py`
         heatmapPath = contArgs.output + '/' + contArgs.heatmap
@@ -466,20 +483,32 @@ def main(contArgs, detArgv, simArgs, simArgv):
         # tell user where it was put
         #print >> sys.stderr, heatmapPath
         logger.info("Drawing heatmap at {}".format(heatmapPath))
+    '''
 
+    '''
     if contArgs.manhattan:
 
         manhattanPath = contArgs.output + '/' + contArgs.manhattan
         #pviz.manhattanPlot(manhattanSeries, manhattanPath, contArgs.key_seq)
-        pviz.manhattanPlot(plotDf, manhattanPath, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals)
+        pviz.manhattanPlot(plotDf, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals, outPath=manhattanPath)
 
         # tell user where it was put
         #print >> sys.stderr, manhattanPath
         logger.info("Drawing Manhattan plot at {}".format(manhattanPath))
 
-        alignPath = contArgs.output + "test_MSA.pdf"
+        alignPath = os.path.join(contArgs.output, "test_MSA.pdf")
         ali = AlignIO.read(contArgs.aa_align, "fasta")
-        pviz.alignmentHighlighted(plotDf, ali, [], alignPath)
+        pviz.alignmentHighlighted(plotDf, ali, tipTraits, outPath=alignPath)
+        pviz.masterFigure(plotDf, ali, tipTraits, elements=0, outPath=alignPath, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals)
+    '''
+
+    # draw the requested kind of figure
+    if contArgs.figure is not None:
+        aliBasename = os.path.splitext(os.path.basename(contArgs.aa_align))[0]
+        figPath = os.path.join(contArgs.output, aliBasename + ".pdf")
+        ali = AlignIO.read(contArgs.aa_align, "fasta")
+        # draw master figure
+        pviz.masterFigure(plotDf, ali, tipTraits, elements=contArgs.figure, outPath=figPath, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals)
 
     if contArgs.master_table:
         #print >> sys.stderr, "# MESSAGE: Saving master table of results:"
@@ -851,7 +880,7 @@ def loadSavedSims(pickleDir, tree_newick, simArgs, alpha = [0.10, 0.05, 0.01], b
                 pickleCheckList.append(curveParser.getint("sim_args", key) >= value)
             except:
                 # if one of the passed options is not stored in the pickle
-                logger.warning("{} is not in pickle {}!\nproceeding...".format(key, file))
+                logger.warning("{} is not in pickle {}!\nAnalysis proceeds, but consider stashing your pickles.".format(key, file))
                 pickleCheckList.append(True)
                 pass
 
@@ -1080,17 +1109,29 @@ def keyAlignmentColumns(algt, keySeqID):
 
 ### Utility function that does a merge, then consolidates duplicated columns.
 ### It does this by choosing the first truthy value in the pair of columns for each row.
-def mergeFillNans(left, right, positiveType = list, **kwargs):
+def mergeFillNans(left, right, **kwargs):
 
-    merged = pd.merge(left, right, **kwargs)
+    '''
+    # a helper function that makes np.nan Falsy and gives single value for truth of lists
+    def safeBool(x):
+        if not isinstance(x, list):
+            if pd.isnull(x): return False
+            else:return bool(x)
+        else:
+            return any(x)
+    '''
+
+    merged = pd.merge(left, right, **kwargs).astype('object')
     dupedColumns = [colname[:-2] for colname in merged.columns if "_x" in colname]
 
+    # pick the max values along the whole pair of columns (np.nan = -inf)
     for colname in dupedColumns:
         colnamex = colname + "_x"
         colnamey = colname + "_y"
-        # make a new column with just the non-null values
-        merged[colname] = merged[[colnamex, colnamey]].apply(lambda row: next(item for item in row if isinstance(item, positiveType)), axis=1)
-        # drop the unconsolidated columns
+        colx = merged[colnamex].tolist()
+        coly = merged[colnamey].tolist()
+        colMerged = [max(comp) for comp in zip(colx, coly)]
+        merged[colname] = colMerged
         merged.drop([colnamex, colnamey], axis=1, inplace=True)
 
     return merged
