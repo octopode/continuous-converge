@@ -13,7 +13,8 @@ from Bio import AlignIO
 ### 0 plots everything
 ### 1 plots just the Manhattan
 ### 2 plots just the highlighted alignment
-def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, blkBkgd=False, width=24, height=8, fontsize=None, outPath=None):
+def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, thresPP=None, blkBkgd=False,
+                 width=24, height=8, xLabel="amino acid site", fontsize=None, outPath=None):
 
     if blkBkgd: plt.style.use('dark_background')
 
@@ -24,12 +25,12 @@ def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, blkBkgd=
         fig, ax = plt.subplots(2, 1)
         # plot Manhattan
         plt.subplot(ax[0])
-        manhattanPlot(df, alpha=alpha, beta=beta, fontsize=fontsize)
+        manhattanPlot(df, alpha=alpha, beta=beta, thresPP=thresPP, fontsize=fontsize)
         # take away the xlabel
         plt.xlabel('')
         # plot alignment
         plt.subplot(ax[1])
-        alignmentHighlighted(df, ali, tipTraits, fontsize=fontsize)
+        alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, fontsize=fontsize)
 
 
     elif elements == 1:
@@ -38,14 +39,14 @@ def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, blkBkgd=
 
         fig, ax = plt.subplots()
         # plot Manhattan
-        manhattanPlot(df, alpha=alpha, beta=beta, fontsize=fontsize)
+        manhattanPlot(df, alpha=alpha, beta=beta, thresPP=thresPP, xLabel=xLabel, fontsize=fontsize)
 
     elif elements == 2:
         if not fontsize:
             fontsize = min(4 * height, 75 * width / len(df))
 
         fig, ax = plt.subplots()
-        alignmentHighlighted(df, ali, tipTraits, fontsize=fontsize)
+        alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, fontsize=fontsize)
 
     # save the figure
     plt.tight_layout()
@@ -55,7 +56,7 @@ def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, blkBkgd=
 
 
 ### draw a Manhattan plot of sitewise PPs and confidence windows
-def manhattanPlot(df, thresholdsPP=(0, 0.8, 0.9, 1), alpha=None, beta=None,
+def manhattanPlot(df, thresPP=(0.8, 0.9), alpha=None, beta=None,
                   xLabel="amino acid site", xSpacing=10, blkBkgd=False, width=20, height=8, fontsize=None, outPath=None):
 
     # DataFrame column names for certain data
@@ -63,14 +64,17 @@ def manhattanPlot(df, thresholdsPP=(0, 0.8, 0.9, 1), alpha=None, beta=None,
     pcocPP = "PP_Max"
     # PP lower thresholds for Type I error
     typeIPP = "PP_Threshold_TypeI"
-    # PP upper threshold for Type II error
+    # PP upper thresholds for Type II error
     typeIIPP = "PP_Threshold_TypeII"
+    # categorical significance level
+    sigLevel = "SigLevel"
     # if the above columns are found then args alpha and beta will be checked for the corresponding error rates
     # if typeIIPP < typeIPP then there are insufficient data to achieve the specified error rates at that site
     # force column names for vectorized functions
     df.rename(columns={typeIPP: typeIPP, typeIIPP: typeIIPP}, inplace=True)
     alpha = sorted(alpha, reverse=True)
     beta = sorted(beta)
+    thresPP = [0] + thresPP
 
     # if font size not specified by caller, attempt to autoscale
     if not fontsize:
@@ -124,16 +128,23 @@ def manhattanPlot(df, thresholdsPP=(0, 0.8, 0.9, 1), alpha=None, beta=None,
     else:
         # constant threshold mode
         if not blkBkgd:
-            colors = ["black", "red", "violet"]
+            colors = ["black", "blue", "red", "violet"]
         else:
-            colors = ["white", "red", "violet"]
+            colors = ["white", "blue", "red", "violet"]
+
         # plot horizontal PP thresholds
-        plt.hlines(thresholdsPP[:-1], xlimits[0], xlimits[1], colors=colors)
+        plt.hlines(thresPP[1:], xlimits[0], xlimits[1], colors=colors[1:])
 
         # for lin
         # masks = [[pThresholds[i] >= el > pThresholds[i + 1] for el in y] for i in range(len(pThresholds) - 1)]
         # for log
-        masks = np.array([[thresholdsPP[i] <= el < thresholdsPP[i + 1] for el in y] for i in range(len(thresholdsPP) - 1)])
+
+        # old mask compares PP with thresholds
+        #masks = np.array([[thresPP[i] <= el < thresPP[i + 1] for el in y] for i in range(len(thresPP) - 1)])
+
+        # new mask just checks the passed sig level
+        masks = np.array([[el == i for el in df[sigLevel]] for i in range(len(thresPP))])
+
         # plot the bars in each color
         for i, mask in enumerate(masks):
             plt.bar(x * mask, y * mask, color=colors[i], width=0.7)
@@ -152,13 +163,15 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", highlight
     # DataFrame column names for certain data
     # PCOC posterior probability (bar height)
     pcocPP = "PP_Max"
+    # categorical significance level
+    sigLevel = "SigLevel"
+    '''
+    # deprecate these - 20190313
     # PP lower thresholds for Type I error
     typeIPP = "PP_Threshold_TypeI"
     # PP upper threshold for Type II error
     typeIIPP = "PP_Threshold_TypeII"
-    # categorical significance level
-    sigLevel = "SigLevel"
-
+    '''
     # if font size not specified by caller, attempt to autoscale
     if not fontsize:
         fontsize = min(2.5 * height, 75 * width / len(df))
@@ -170,8 +183,9 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", highlight
     ali2plt(ali, fontsize=fontsize, rowSpacing=fontsize/10)
     plt.xlabel(xLabel, fontsize=fontsize)
 
+    # push this back to the parent script and have it fed to the plotting routine
     # add a significance level column to the dataFrame: 0 (not sig) -> index of the most stringent alpha cutoff
-    df[sigLevel] = np.vectorize(rank)(df[pcocPP], df[typeIPP])
+    #df[sigLevel] = np.vectorize(rank)(df[pcocPP], df[typeIPP])
 
     # set up a colormap that varies alpha
     cm = colors.LinearSegmentedColormap.from_list(name = 'cm', colors = [(1,1,1,0.8),(1,1,1,0)])
@@ -295,7 +309,7 @@ def breakOutThresholds(df, alpha, beta):
         df["beta_" + str(thres)] = [j[i] if isinstance(j, list) else np.nan for j in df["PP_Threshold_TypeII"].tolist()]
 
     return df
-
+'''
 ### Rank val in iterable seri
 def rank(val, seri):
     if isinstance(seri, list):
@@ -306,7 +320,7 @@ def rank(val, seri):
         return rank
     else:
         return 0
-
+'''
 ### Create a discrete colormap for monochromatic light based on wavelength
 ### FPs are not monochromatic, so my work is not done here!
 def realRainbow():

@@ -48,13 +48,14 @@ from ast import literal_eval
 from ete3 import Tree, NodeStyle, TreeStyle, TextFace, CircleFace
 from shutil import rmtree
 from time import sleep
-from pprint import pprint
 from Bio import AlignIO
+from pprint import pprint
+
 
 # custom modules
 import pcoc_treeviz as treeviz
 import pcoc_plots as pviz
-from wl2rgb import wavelength_to_rgb
+#from wl2rgb import wavelength_to_rgb
 
 # create logger
 logger = logging.getLogger(__name__)
@@ -77,13 +78,14 @@ def parse_args(argv):
 
     Options = parser.add_argument_group('Options')
     Options.add_argument('-aa', '--aa_align', type=str, help="AA alignment name")
-    Options.add_argument('-i', '--invert_trait', action="store_true",
-                         help="Invert the binary trait, i.e. assert that low trait value is the convergent state")
+    #Options.add_argument('-i', '--invert_trait', action="store_true",
+    #                     help="Invert the binary trait, i.e. assert that low trait value is the convergent state")
     Options.add_argument('-nb', '--num_bins', type=int, default=0,
                          help="Average continuous trait into n equal-width bins, 0 = no binning")
     Options.add_argument('-bw', '--bin_width', type=float, default=0,
                          help="Average continuous trait into bins of width w, 0 = no binning")
-    Options.add_argument('--decimal', type=int, default=0,
+    Options.add_argument('-m', "--min_events", type=int, default=3, help="Minimum number of transition (=convergent events). (default: 3)")
+    Options.add_argument('-r', '--round_decimal', type=int, default=0,
                          help="Round traits to n decimals in filenames and figures")
     Options.add_argument('-tt', '--test_trees', action="store_true",
                          help="Draw test trees to evaluate the discretization scheme")
@@ -93,9 +95,10 @@ def parse_args(argv):
     Options.add_argument('--sim_alpha_vals', type=float, nargs='*', default=[0.10, 0.05, 0.01], help="alpha values to test in post hoc simulations")
     Options.add_argument('--sim_beta_vals', type=float, nargs='*', default=[0.6, 0.8, 0.9], help="beta values to test in post hoc simulations")
     Options.add_argument('--sim_no_cleanup', action="store_true", help="Set to retain all the sequence sim and error estimation siles")
-    Options.add_argument('-k', '--key_seq', type=str, help="Name of key sequence on which to index the output columns")
+    Options.add_argument('-k', '--key_seq', type=list, default=[], help="Names of key sequences on which to index the output columns")
     Options.add_argument('-fig', '--figure', type=int, default=None, help="Figure elements to output. 0 -> Manhattan with alignment; 1 -> Manhattan; 2 -> Shaded alignment")
-    Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
+    Options.add_argument('-pp', '--pp_thres', type=list, default=[0.8, 0.9, 0.95], help="PP thresholds to highlight in output")
+    #Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
     #Options.add_argument('-hm', '--heatmap', type=str,
     #                     help="Render heatmap from the latest available set of data and save it here")
     #Options.add_argument('-mp', '--manhattan', type=str, help="Save Manhattan plot at...")
@@ -180,12 +183,12 @@ def parse_args(argv):
     simOptions.add_argument('-CATX_sim', type=int, choices=[10, 60],
                              help="Profile categories to simulate data (10->C10 or 60->C60). (default: set by det)",
                              default=detArgs.CATX_est)
-    simOptions.add_argument('-min_dist_CAT', type=float, metavar="FLOAT",
+    simOptions.add_argument('--min_dist_CAT', type=float, metavar="FLOAT",
                              help="Minimum distance between Ancestral and Convergent profiles to simulate the alignment (default: no limits)",
                              default=0)
-    simOptions.add_argument('-c_min', type=int, metavar="INT",
-                               help="Minimum number of transition (=convergent events). (default: 2)",
-                               default=2)
+    #simOptions.add_argument('-c_min', type=int, metavar="INT",
+    #                           help="Minimum number of transition (=convergent events). (default: 2)",
+    #                           default=2)
     #simOptions.add_argument('--plot_ali', action="store_true",
     #                         help="For each couple of profiles, plot a summary of the convergent scenario containing the tree and the alignment.",
     #                         default=False)
@@ -207,9 +210,9 @@ def parse_args(argv):
     simOptions.add_argument('--bl_noise', action="store_true",
                                help="Add noise in the branch lengths of of tree for the detection process.",
                                default=False)
-    #simOptions.add_argument('--ev_noise', choices=["+1", "-1", "=1"],
-    #                           help="Add noise in the event placing for the detection process. +1 to add an event,  -1 to remove one, =1 to change one. -c must be fix.",
-    #                           default=False)
+    simOptions.add_argument('--ev_noise', choices=["+1", "-1", "=1"],
+                               help="Add noise in the event placing for the detection process. +1 to add an event,  -1 to remove one, =1 to change one. -c must be fix.",
+                               default=False)
     simOptions.add_argument('--root_noise', choices=["ll", "lr", "rr", "rl"],
                                help="Add noise in the root placing for the detection process. ll to move the root 2 nodes left, lr to move the root 1 node left and 1 node right, ...",
                                default=False)
@@ -264,7 +267,8 @@ def main(contArgs, detArgv, simArgs, simArgv):
     tree = init_tree(contArgs.tree)
     tree_newick = tree.write()
     # not mucking with additive trees yet; ultrametrize the tree and normalize to length 1
-    tree.convert_to_ultrametric(tree_length=1)
+    # 20190313: convert_to_ultrametric() is suspect. Relaxed clock with phytools instead.
+    #tree.convert_to_ultrametric(tree_length=1)
 
     ### Generate convergent scenarios
 
@@ -275,7 +279,8 @@ def main(contArgs, detArgv, simArgs, simArgv):
     # get cutoffs using specified binning
     cutoffs = binBy(nodeTraits, fixNumBins=contArgs.num_bins, fixBinWidth=contArgs.bin_width)[0]
     # Generate discrete trait matrix for all cutoff values
-    binDF = discretize(nodeTraits, cutoffs, contArgs.invert_trait)
+    #binDF = discretize(nodeTraits, cutoffs, contArgs.invert_trait)
+    binDF = discretize(nodeTraits, cutoffs)
     # consolidate redundant scenarios
     # binDF = uniqueColumnFilter(binDF)[0] # element [1] is the chaff
     binDF = uniqueScenarios(binDF)
@@ -285,7 +290,7 @@ def main(contArgs, detArgv, simArgs, simArgv):
     # convert binary dataframe into scenario strings
     scenarios = scenarioStrings(binDF, tree)
     # remove scenarios with too few convergent events
-    scenarios = minTransitionsFilter(scenarios, simArgs.c_min)
+    scenarios = minTransitionsFilter(scenarios, contArgs.min_events)
 
     scenDir = contArgs.output + "/Scenarios"
     simDir = contArgs.output + "/Simulations"
@@ -303,12 +308,31 @@ def main(contArgs, detArgv, simArgs, simArgv):
 
         #print >> sys.stderr, "# MESSAGE: Drawing trees..."
         logger.info("Drawing trees...")
+
+        # get necessary number of decimals for file non-replacement
+        # if specified decimal places is 0 (default; not overridden)
+        if not contArgs.round_decimal:
+            # get the smallest gap between cutoffs
+            minGap = findMinDiff(scenarios.keys())
+            decimal = -int(np.log10(minGap)) + 1
+        else:
+            decimal = contArgs.round_decimal
+
+        def grayscaleMapper(x, top=max(nodeTraits), bot=min(nodeTraits), scaleMax=255):
+            x = (float(x) - bot) / (top - bot)
+            # low vals are white
+            val = scaleMax*(1-x)
+            return (val, val, val)
+
         # draw trait-colored tree
-        treeviz.traitTree(tree, nodeTraits, wavelength_to_rgb, testDir)
+        treeviz.traitTree(tree, nodeTraits, grayscaleMapper, testDir, floatSwitch=decimal)
+        #treeviz.traitTree(tree, nodeTraits, wavelength_to_rgb, testDir)
         # treeviz.traitTreeMinimal(tree, nodeTraits, wavelength_to_rgb, contArgs.output)  # draw trait-colored tree
         # draw boring test trees that indicate convergent scenario with red/orange
-        treeviz.testTrees(tree, scenarios, testDir, contArgs.tree, contArgs.decimal)
+        #treeviz.testTrees(tree, scenarios, testDir, contArgs.tree, decimal)
+        #treeviz.testTrees(scenarios, testDir, contArgs.tree, floatSwitch=decimal) # working 20190313
         # treeviz.testTreesMinimal(tree, scenarios, nodeTraits, wavelength_to_rgb, contArgs.tree, contArgs.output) # draw test trees with color-coded nodes
+        treeviz.traitTestTrees(scenarios, nodeTraits, grayscaleMapper, testDir, contArgs.tree, floatSwitch=decimal)
 
     ### run site detection
 
@@ -356,36 +380,27 @@ def main(contArgs, detArgv, simArgs, simArgv):
     # Profile_C
     # NB_CAT
 
+    # get the PCOC PPs for all cutoffs
     metaDf = consolidatePCOCOutput(scenarios, scenDir, contArgs.aa_align)
-
-    # map the PP scores to key sequence positions if desired
-    # alignment reindexing is done post-analysis so user can switch key seqs on the fly without reanalyzing
-    #TODO: revise key seq mapping so that all renumbered files are saved as copies and original is always preserved
-    '''
-    if contArgs.key_seq:
-        alignment = AlignIO.read(contArgs.aa_align, format="fasta")
-        # get key columns of the alignment
-        keyCols = keyAlignmentColumns(alignment, contArgs.key_seq)
-        # filter the 2-column data table to contain only these sites
-        metaDf = metaDf[metaDf["Sites"].isin(keyCols)]
-        # reindex the sites
-        metaDf["Sites"] = [keyCols.index(i) + 1 for i in metaDf["Sites"]]  # note index shift!
-    '''
 
     # recast the molten/long-format metaDF to wide format
     metaDfWide = metaDf.pivot(columns="Cutoff", index="Sites", values="PCOC")
-    # the transpose of this is used for plotting
-    heatmapDf = metaDf.pivot(index="Cutoff", columns="Sites", values="PCOC")
+
+    # get the max PPs and corresponding cutoffs
+    plotDf = maxPPScenarios(metaDf, methodPP = "PCOC")
+
+    numSites = plotDf.shape[0]
 
     # contArgs.sim is a float value specifying how strong the a priori PP signal needs to be at a site to warrant
     # post hoc simulation.
+    # this conditional block adds columns to plotDf
     if contArgs.sim:
         # make a dir for pickled sim results
         try:
             os.mkdir(simDir)
         except:
             pass
-
+        '''
         # init post hoc simulation DF with sites index
         simDf = pd.DataFrame(index = metaDfWide.index)
 
@@ -396,7 +411,7 @@ def main(contArgs, detArgv, simArgs, simArgv):
         simDf["Cutoff"] = [metaDfWide.columns[row[1].tolist().index(simDf["PP_Max"][rowNum+1])] for rowNum, row in enumerate(metaDfWide.iterrows())]
         # below should be the same command, using .iloc() for speed
         #simDf["Cutoff"] = [metaDfWide.columns[row[1].tolist().index(simDf.iloc(rowNum + 1, "PP_Max"))] for rowNum, row in enumerate(metaDfWide.iterrows())]
-
+        '''
         # lnL matrix lookup is not by site, but by cutoff
         # so lnL matrices for all top cutoffs are loaded into memory
         # if this gets too heavy I can save/read the matrices to disk
@@ -404,7 +419,8 @@ def main(contArgs, detArgv, simArgs, simArgv):
         # make a set of just the relevant cutoffs
         #maxPPcutoffsSet = set([cutoff for cutoff in simDf["Cutoff"] if cutoff >= contArgs.sim_pp_thres])
         # ^this is not right!
-        maxPPcutoffsSet = set(simDf.loc[simDf["PP_Max"] >= contArgs.sim_pp_thres]["Cutoff"])
+        #maxPPcutoffsSet = set(simDf.loc[simDf["PP_Max"] >= contArgs.sim_pp_thres]["Cutoff"])
+        maxPPcutoffsSet = set(plotDf.loc[plotDf["PP_Max"] >= contArgs.sim_pp_thres]["Cutoff"])
         # load 3D matrices for those cutoffs
         # this is a slow step, probably from all the file handling
         # its complexity should scale with number of cutoffs, not sites.
@@ -412,12 +428,20 @@ def main(contArgs, detArgv, simArgs, simArgv):
         #lnLMatricesPC = {cutoff: consolidateBPPOutput(cutoff, scenDir, withOneChange=False) for cutoff in maxPPcutoffsSet}
 
         # iterate over the sites and assign profiles and model lnLs to each
+        '''
         for site in range(simDf.shape[0]):
             # if the site made the cut for simulation
             if simDf["PP_Max"].tolist()[site] >= contArgs.sim_pp_thres:
                 # get the profiles and the model lnL and tack them on the row
                 simDf.loc[site + 1, "CAT_Anc"], simDf.loc[site + 1, "CAT_Con"], simDf.loc[site + 1, "lnL_PCOC"] = getMLCATProfiles(site, lnLMatricesPCOC[simDf["Cutoff"].tolist()[site]])
                 #simDf.loc[site + 1, "CAT_Anc_PC"], simDf.loc[site + 1, "CAT_Con_PC"], simDf.loc[site + 1, "lnL_PC"] = getMLCATProfiles(site, lnLMatricesPC[cutoff])
+        '''
+        for site in range(plotDf.shape[0]):
+            # if the site made the cut for simulation
+            if plotDf["PP_Max"].tolist()[site] >= contArgs.sim_pp_thres:
+                # get the profiles and the model lnL and tack them on the row
+                plotDf.loc[site + 1, "CAT_Anc"], plotDf.loc[site + 1, "CAT_Con"], plotDf.loc[site + 1, "lnL_PCOC"] = getMLCATProfiles(site, lnLMatricesPCOC[plotDf["Cutoff"].tolist()[site]])
+                #plotDf.loc[site + 1, "CAT_Anc_PC"], plotDf.loc[site + 1, "CAT_Con_PC"], plotDf.loc[site + 1, "lnL_PC"] = getMLCATProfiles(site, lnLMatricesPC[cutoff])
 
         # display profile numbers as ints in the table
         # but this crashes when there are NaNs :/
@@ -427,11 +451,13 @@ def main(contArgs, detArgv, simArgs, simArgv):
         #postHocFilename = os.path.splitext(contArgs.master_table)[0] + "_posthoc.tsv"
         #simDf.to_csv(postHocFilename, sep='\t')
 
-        print simDf
+        #TEST
+        print plotDf
 
         # make a list of the different error curves required
         # this amounts to the unique rows of simDf, less the lnL column
-        uniqueSims = simDf.dropna()[["Cutoff", "CAT_Anc", "CAT_Con"]].drop_duplicates().reset_index(drop = True)
+        #uniqueSims = simDf.dropna()[["Cutoff", "CAT_Anc", "CAT_Con"]].drop_duplicates().reset_index(drop = True)
+        uniqueSims = plotDf.dropna()[["Cutoff", "CAT_Anc", "CAT_Con"]].drop_duplicates().reset_index(drop=True)
         # Not sure whether this is necessary: convert the profiles to ints for merging (the NaNs are gone!)
         uniqueSims["CAT_Anc"] = uniqueSims["CAT_Anc"].astype(int)
         uniqueSims["CAT_Con"] = uniqueSims["CAT_Con"].astype(int)
@@ -444,6 +470,12 @@ def main(contArgs, detArgv, simArgs, simArgv):
         empty = contArgs.output + "/empty"
 
         pickleDir = os.path.join(simDir, "Pickles")
+
+        # make pickle dir
+        try:
+            os.mkdir(pickleDir)
+        except:
+            pass
 
         # load all the available error curves into a DataFrame: metadata mapped to list of confidence thresholds
         availSims = loadSavedSims(pickleDir, tree_newick, simArgs, alpha = contArgs.sim_alpha_vals, beta = contArgs.sim_beta_vals)
@@ -466,29 +498,80 @@ def main(contArgs, detArgv, simArgs, simArgv):
         # replace NaNs in threshold cols with empty list
         for row in uniqueSims.loc[uniqueSims.PP_Threshold_TypeI.isnull(), 'PP_Threshold_TypeI'].index:
             uniqueSims.at[row, 'PP_Threshold_TypeI'] = []
+        for row in uniqueSims.loc[uniqueSims.PP_Threshold_TypeII.isnull(), 'PP_Threshold_TypeII'].index:
             uniqueSims.at[row, 'PP_Threshold_TypeII'] = []
         
         uniqueSims = mergeFillNans(uniqueSims, newSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con", "Scenario"])
 
         # left-join the unique sims table to the sitewise table
-        plotDf = pd.merge(simDf, uniqueSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
+        #plotDf = pd.merge(simDf, uniqueSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
+        plotDf = pd.merge(plotDf, uniqueSims, how='left', on=["Cutoff", "CAT_Anc", "CAT_Con"])
+
+        # TEST
+        print plotDf
+
+    # ascertain significance level for each site
+    # for bootstrap, it goes ...-3, -2, -1, 0, 1, 2, 3... where -3, 3 are the most stringent negative and positive thres
+    if contArgs.sim:
+        plotDf["SigLevel"] = np.vectorize(rankPosNeg)(plotDf['PP_Max'], plotDf['PP_Threshold_TypeI'],
+                                                      plotDf['PP_Threshold_TypeII'])
+    else:
+    # for PP, it goes 0, 1, 2, 3 etc for the specified cutoffs
+        plotDf['PP_Threshold'] = [contArgs.pp_thres] * numSites
+        plotDf["SigLevel"] = np.vectorize(rank)(plotDf["PP_Max"], plotDf['PP_Threshold'])
+
+    # get basename of the alignment to name outfiles after
+    # should change this to basename of the trait file, since doing multiple traits
+    aliBasename = os.path.splitext(os.path.basename(contArgs.aa_align))[0]
+
+    # map the PP scores to key sequence positions if desired
+    # alignment reindexing is done post-analysis so user can switch key seqs on the fly without reanalyzing
+    if contArgs.key_seq:
+        # read in the alignment
+        ali = AlignIO.read(contArgs.aa_align, format="fasta")
+        # for each key species
+        for sp in contArgs.key_seq:
+            # get key columns of the alignment
+            #keyCols = keyAlignmentColumns(ali, contArgs.key_seq)
+            ## filter the data table to contain only these sites
+            #plotDfMapped = plotDf[plotDf["Sites"].isin(keyCols)]
+            ## reindex the sites from 1 to n
+            #plotDfMapped["Sites"] = range(1, len(plotDfMapped.index) + 1)
+            plotDfMapped = reindexDataframe(plotDf, ali, sp)
+
+            # save results table keyed on sp
+            tsvPath = os.path.join(contArgs.output, aliBasename + "_key-" + sp + "_results.tsv")
+            plotDfMapped.to_csv(tsvPath, sep='\t')
+            # tell user where it was put
+            logger.info("Table of results saved at {}".format(tsvPath))
+
+            # if figures are requested
+            if contArgs.figure is not None:
+                figPath = os.path.join(contArgs.output, aliBasename + "_key-" + sp + "_figure.pdf")
+                # remap the alignment itself
+                aliMapped = reindexAlignment(ali, sp)
+                # save figure keyed on sp
+                pviz.masterFigure(plotDfMapped, aliMapped, tipTraits, elements=contArgs.figure, outPath=figPath,
+                              alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals, xLabel="amino acid site in {}".format(sp))
+                logger.info("Figure saved at {}".format(figPath))
+
+    # results are always output for the original alignment, with gaps
+
+    # output collated data. This is no longer subject to an a command-line arg
+    # Print master data table. Note that it is transpose of the table sent to heatMapDF()
+    # metaDfWide.to_csv(contArgs.master_table, sep='\t')
+    tsvPath = os.path.join(contArgs.output, aliBasename + "_results.tsv")
+    plotDf.to_csv(tsvPath, sep='\t')
+    # tell user where it was put
+    logger.info("Table of results saved at {}".format(tsvPath))
 
     # draw the requested kind of figure
     if contArgs.figure is not None:
-        aliBasename = os.path.splitext(os.path.basename(contArgs.aa_align))[0]
         figPath = os.path.join(contArgs.output, aliBasename + "_figure.pdf")
         ali = AlignIO.read(contArgs.aa_align, "fasta")
         # draw master figure
-        pviz.masterFigure(plotDf, ali, tipTraits, elements=contArgs.figure, outPath=figPath, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals)
+        pviz.masterFigure(plotDf, ali, tipTraits, elements=contArgs.figure, outPath=figPath, alpha=contArgs.sim_alpha_vals, thresPP=contArgs.pp_thres, beta=contArgs.sim_beta_vals)
         logger.info("Figure saved at {}".format(figPath))
-
-    # output collated data.
-    if contArgs.master_table:
-        # Print master data table. Note that it is transpose of the table sent to heatMapDF()
-        #metaDfWide.to_csv(contArgs.master_table, sep='\t')
-        plotDf.to_csv(contArgs.master_table, sep='\t')
-        # tell user where it was put
-        logger.info("Table of results saved at {}".format(contArgs.master_table))
 
 ## HELPER FUNCTIONS ##
 
@@ -677,9 +760,26 @@ def uniqueScenarios(binDF):
 
     return binDF
 
+### Invert scenarios in which the root is called convergent
+def convergentRootFilter(binDF):
+
+    # store the original columns
+    origCutoffs = binDF.columns
+    # get the columns whose last (root) element is True
+    convergentCutoffs = [colName for colName in origCutoffs if binDF[colName].iloc[-1]]
+    # invert those columns
+    for cutoff in convergentCutoffs:
+        binDF[cutoff] = ~binDF[cutoff]
+    # drop those columns
+    #binDF.drop(labels = convergentCutoffs, axis = 1, inplace = True)
+
+    # notify user of outcome of root filter
+    logger.info("{}/{} scenarios inverted due to convergent root:\n{}".format(len(convergentCutoffs), len(origCutoffs), convergentCutoffs))
+
+    return binDF
 
 ### Remove and report on scenarios in which the root is called convergent
-def convergentRootFilter(binDF):
+def convergentRootFilterOld(binDF):
 
     # store the original columns
     origCutoffs = binDF.columns
@@ -772,6 +872,26 @@ def consolidatePCOCOutput(scenarios, scenDir, aa_align):
 
     return metaDf
 
+
+# take the dataframe returned by consolidatePCOCOutput()# and return a sitewise DF with columns `Sites`, `Cutoff`, `PP_max`
+def maxPPScenarios(metaDf, methodPP="PCOC"):
+
+    # recast the molten/long-format metaDF to wide format
+    metaDfWide = metaDf.pivot(columns="Cutoff", index="Sites", values=methodPP)
+
+    # init new DF with sites index
+    plotDf = pd.DataFrame(index=metaDfWide.index)
+
+    # iterrows() calls could probably be optimized
+    # get the highest PP for each site and the cutoff for that PP
+    plotDf["PP_Max"] = [max(row[1].tolist()) for row in metaDfWide.iterrows()]
+    # get the cutoff for that PP
+    plotDf["Cutoff"] = [metaDfWide.columns[row[1].tolist().index(plotDf["PP_Max"][rowNum + 1])] for rowNum, row in
+                       enumerate(metaDfWide.iterrows())]
+
+    return plotDf
+
+
 ### Gather up the .infos files for a particular cutoff in ScenDir and put the lnL data into a 3D array
 def consolidateBPPOutput(cutoff, scenDir, withOneChange = True):
 
@@ -787,7 +907,7 @@ def consolidateBPPOutput(cutoff, scenDir, withOneChange = True):
         latestRun = sorted(os.listdir(subDir))[-1]
         estimsDir = subDir + "/" + latestRun + "/Estimations"
         # get list of target filenames
-        lnLfnames = [fname for fname in os.listdir(estimsDir) if fname.endswith(searchPattern)]
+        lnLfnames = sorted([fname for fname in os.listdir(estimsDir) if fname.endswith(searchPattern)])
     except:
         logger.warning("Log likelihoods not loaded for cutoff {}.".format(cutoff))
         return None
@@ -806,12 +926,18 @@ def consolidateBPPOutput(cutoff, scenDir, withOneChange = True):
 
     # init the array
     lnLs = np.empty((numSites, numProfilesA, numProfilesC))
+    #lnLs = np.empty((numProfilesA, numSites, numProfilesC))
+    #lnLs = np.empty((numProfilesA, numProfilesC, numSites)) # seems right?
 
     # iteratively build the array
     for i, fname in enumerate(lnLfnames):
         #print pd.read_table(estimsDir + "/" + lnLfnames[i])["lnL"].tolist()
-        lnLs[:][profilesA[i]-1][profilesC[i]-1] = pd.read_table(estimsDir + "/" + lnLfnames[i])["lnL"].tolist()
+        # more than one non-: entry in the slicing tuple?
+        #lnLs[:][profilesA[i]-1][profilesC[i]-1] = pd.read_table(estimsDir + "/" + lnLfnames[i])["lnL"].tolist()
+        lnLs[:, profilesA[i] - 1, profilesC[i] - 1] = pd.read_table(estimsDir + "/" + lnLfnames[i])["lnL"].tolist()
 
+    #TEST
+    print lnLs.shape
     return lnLs
 
 # get the ancestral and convergent CAT profiles from name of a PCOC/BPP .infos file
@@ -824,9 +950,9 @@ def infosFname2Profiles(fname):
 def getMLCATProfiles(site, lnLs):
 
     # get A, C indices of the max lnL for a given site in the matrix
-    profileA, profileC = np.unravel_index(np.argmax(lnLs[site][:][:]), (lnLs.shape[1], lnLs.shape[2]))
+    profileA, profileC = np.unravel_index(np.argmax(lnLs[site, :, :]), (lnLs.shape[1], lnLs.shape[2]))
     # get the actual lnL
-    lnL = lnLs[site][profileA][profileC]
+    lnL = lnLs[site, profileA, profileC]
 
     # return 1-indexed CAT numbers
     return profileA + 1, profileC + 1, lnL
@@ -923,12 +1049,6 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
         simOutDir = os.path.join(simDir, simIDStr)
         try:
             os.mkdir(simOutDir)
-        except:
-            pass
-
-        # make pickle dir
-        try:
-            os.mkdir(pickleDir)
         except:
             pass
 
@@ -1079,6 +1199,66 @@ def keyAlignmentColumns(algt, keySeqID):
 
     return mappedCols
 
+### Find the start of all (possibly-overlapping) instances of needle in haystack
+# this generator from https://stackoverflow.com/questions/11122291/python-find-char-in-string-can-i-get-all-indexes
+def findOffsets(haystack, needle):
+
+    offs = -1
+    while True:
+        offs = haystack.find(needle, offs+1)
+        if offs == -1:
+            break
+        else:
+            yield offs
+
+def reindexDataframe(df, ali, keyID):
+
+    # get the key sequence
+    seqIDs = [record.id for record in ali]
+    keySeq = ali[seqIDs.index(keyID)].seq
+    gapIndices = list(findOffsets(keySeq, '-'))
+
+    # get the DF index labels corresponding to those integer positions
+    gapIndexLabels = [df.index[indexPos] for indexPos in gapIndices]
+    # drop corresponding rows from DF
+    # making a copy so as not to mess up DF for calling process
+    outDf = df.drop(gapIndexLabels, axis=0)
+    outDf.reset_index(drop=True, inplace=True)
+
+    # reset the "fake" site index if it exists
+    if "Sites" in outDf.columns:
+        outDf["Sites"] = [i + 1 for i in outDf.index]
+
+    return outDf
+
+### take a BioAlign Alignment and return it with gaps in the keyID seq removed
+def reindexAlignment(ali, keyID):
+    # get the key sequence
+    seqIDs = [record.id for record in ali]
+    keySeq = ali[seqIDs.index(keyID)].seq
+    # "extra gap" on the end makes sure we capture the last ungapped part
+    gapIndices = list(findOffsets(keySeq, '-')) + [len(keySeq)]
+
+    # get slices of the alignment that are not gapped in the keyseq
+    aliSlices = []
+    lastGap = 0
+    for gap in gapIndices:
+        # if not a consecutive gap
+        if gap > lastGap + 1:
+            # get a slice between and excluding this gap and the last
+            aliSlices.append(ali[ : , lastGap + 1: gap])
+        # store current gap index
+        lastGap = gap
+    #TEST
+    #for chunk in aliSlices:
+    #    print type(chunk)
+    #    AlignIO.write(chunk, sys.stdout, "fasta")
+
+    # put the slices back together. + operator should work!
+    # summation of objects requires changing the default starting value to a compatible object
+    # in this case, an empty slice of our alignment with the same seqIDs
+    return sum(aliSlices, ali[:,0:0])
+
 ### Utility function that does a merge, then consolidates duplicated columns.
 ### It does this by choosing the first truthy value in the pair of columns for each row.
 def mergeFillNans(left, right, **kwargs):
@@ -1107,6 +1287,51 @@ def mergeFillNans(left, right, **kwargs):
         merged.drop([colnamex, colnamey], axis=1, inplace=True)
 
     return merged
+
+# Returns minimum difference between any pair
+def findMinDiff(arr):
+
+    n = len(arr)
+    # Sort array in non-decreasing order
+    arr = sorted(arr)
+
+    # Initialize difference as infinite
+    diff = 10**20
+
+    # Find the min diff by comparing adjacent
+    # pairs in sorted array
+    for i in range(n-1):
+        if arr[i+1] - arr[i] < diff:
+            diff = arr[i+1] - arr[i]
+
+    # Return min diff
+    return diff
+
+
+### Rank val in iterable seri
+# has a built-in sort
+def rank(val, seri):
+    if isinstance(seri, list):
+        rank = 0
+        for i, thres in enumerate(sorted(seri)):
+            if val >= thres:
+                rank += 1
+        return rank
+        # should return 0 if len(seri) == 0
+    else:
+        return int(val >= seri)
+
+# rank() wrapper that takes positive and negative cutoffs
+# and returns a signed sig level
+def rankPosNeg(val, seriPos, seriNeg):
+    # check if it's positive
+    sigLevel = rank(val, seriPos)
+    # check if it's negative
+    if not sigLevel and isinstance(seriNeg, list):
+        sigLevel = rank(val, seriNeg) - len(seriNeg)
+    elif not sigLevel:
+        sigLevel = rank(val, seriNeg) - 1
+    return sigLevel
 
 ### Number tree nodes for consistent reference
 def init_tree(nf):
