@@ -90,7 +90,6 @@ def parse_args(argv):
                          help="Round traits to n decimals in filenames and figures")
     Options.add_argument('-tt', '--test_trees', action="store_true",
                          help="Draw test trees to evaluate the discretization scheme")
-    Options.add_argument('-i', '--instances', type=int, default=1, help="Max number of pcoc_det instances to run concurrently (default: 1)")
     Options.add_argument('--det', action="store_true", help="Set to actually run pcoc_det.py")
     Options.add_argument('--max_gap_allowed', type=int,
                             help="max gap allowed to take into account a site (in %%), must be between 0 and 100 (default:5%%)",
@@ -368,10 +367,7 @@ def main(contArgs, detArgv, simArgs, simArgv):
         # error will be thrown if any of these are specified redundantly at the command line
 
         # DETECT LOOP #
-        # 20190315 - with subprocessing now just compiles the commands
         logger.info("Detecting convergent sites...")
-
-        detArgvsDynamic = [None] * len(scenarios)
         for num, cutoff in enumerate(sorted(scenarios.keys())):
             scenarioString = scenarios[cutoff]
             logger.info("convergent scenario {}/{}: cutoff {}: {}".format(num + 1, len(scenarios), cutoff, scenarioString))
@@ -379,26 +375,8 @@ def main(contArgs, detArgv, simArgs, simArgv):
                 "-o", scenDir + '/' + str(cutoff).replace('.', '_'),
                 "-m", str(scenarios[cutoff])]
 
-            detArgvsDynamic[num] = detArgvDynamic
-
             # run pcoc.det.py
-            #subprocess.call(detArgvDynamic)
-
-        # now all the commands are ready
-        subprocs = [False] * len(scenarios)
-        for num, detArgvDynamic in enumerate(detArgvsDynamic):
-            #while subprocs[num] is not None and subprocs[num] is False: # code for not started
-            while subprocs[num] is False:
-                # if the number of running processes is less than max
-                if sum([safePoll(i) is None for i in subprocs]) < contArgs.instances:
-                    # start up another one
-                    subprocs[num] = subprocess.Popen(detArgvDynamic)
-                    # this ends the while loop and moves up to the for loop to stage the next call
-
-        # wait for all the subprocs to finish
-        for subproc in subprocs:
-            subproc.wait()
-
+            subprocess.call(detArgvDynamic)
         # END DETECT LOOP #
 
     ### Collate, visualize results
@@ -594,9 +572,6 @@ def main(contArgs, detArgv, simArgs, simArgv):
     # should change this to basename of the trait file, since doing multiple traits
     aliBasename = os.path.splitext(os.path.basename(contArgs.aa_align))[0]
 
-    # TEST
-    print plotDf
-
     # map the PP scores to key sequence positions if desired
     # alignment reindexing is done post-analysis so user can switch key seqs on the fly without reanalyzing
     if contArgs.key_seq:
@@ -635,6 +610,8 @@ def main(contArgs, detArgv, simArgs, simArgv):
     # metaDfWide.to_csv(contArgs.master_table, sep='\t')
     tsvPath = os.path.join(contArgs.output, aliBasename + "_results.tsv")
 
+    #TEST
+    print plotDf
     plotDf.to_csv(tsvPath, sep='\t')
     # tell user where it was put
     logger.info("Table of results saved at {}".format(tsvPath))
@@ -1105,135 +1082,86 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
     # SIMULATE LOOP #
     # this would be the place to multithread
 
-    '''
-    ## this is just an example queueing loop put here for reference
-    # now all the commands are ready
-    subprocs = [False] * len(scenarios)
-    for num, detArgvDynamic in enumerate(detArgvsDynamic):
-        while subprocs[num] is not None and subprocs[num] is False:  # code for not started
-            # if the number of running processes is less than max
-            if sum([safePoll(i) is None for i in subprocs]) < contArgs.instances:
-                # start up another one
-                subprocs[num] = subprocess.Popen(detArgvDynamic)
-                # this ends the while loop and moves up to the for loop to stage the next call
-
-    # wait for all the subprocs to finish
-    for subproc in subprocs:
-        subproc.wait()
-    '''
-
     newSims.reset_index(inplace = True)
     numSims = newSims.shape[0]
     logger.info("Running {} new post hoc simulations...".format(numSims))
 
-    # a list of sim-det processes only
-    subprocs = [False] * numSims * 2
     for i, row in newSims.iterrows():
-        # keep checking until the process is started
-        while subprocs[i * 2] is False:
-            # if the number of running processes is less than max
-            if sum([safePoll(j) is None for j in subprocs]) < contArgs.instances:
-                profileA = int(row["CAT_Anc"])
-                profileC = int(row["CAT_Con"])
-                scenStr = row["Scenario"]
-                simIDStr = "A{}_C{}_{}".format(profileA, profileC, scenStr)
-                logger.info("Simulation {}/{}: {}".format(i+1, numSims, simIDStr))
-
-                # sanitize simulation identifier for use as a directory name
-                # it might later be necessary to just call the directory "Sim_i"
-                # if the dirnames get too long
-                #simIDStr = simIDStr.replace('/', '_').replace(',', "-")
-                simIDStr = "sim_{}_{}".format(i, dateTime)
-                # make output dir
-                simOutDir = os.path.join(simDir, simIDStr)
-                try:
-                    os.mkdir(simOutDir)
-                except:
-                    pass
-
-                simArgvDynamic = simArgvStatic + [
-                    "-o", simOutDir,
-                    "-m", str(row["Scenario"]),
-                    "-m_sampled_couple", str(profileA), str(profileC),
-                    ]
-
-                # simulate the alignment
-                # use call() here because it needs to finish before the other 2 start
-                subprocess.call(simArgvDynamic)
-
-                # a clumsy way to make sure detect results don't end up in the sim directory:
-                sleep(2)  # since they are named using dateTime
-
-                # detect on both NEGATIVE, POSITIVE algts for Type I, II error
-                detArgvStatic = ["pcoc_det.py", # program call
-                                 "-f", "-1", # don't waste time filtering output
-                                 ]
-
-                # iterate over negative, then positive
-                for type, profileC in enumerate((int(row["CAT_Anc"]), int(row["CAT_Con"]))):
-                    # if we're dealing with a neutral site
-                    if profileA == profileC and type == 1:
-                        # the detection has already been done, so set job status to done and move on
-                        subprocs[i * 2 + type] = True
-                    else:
-                        # retrieve the simulated alignment
-                        simAlgtPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[0], "Tree_1/sequences/Scenario_1",
-                                                   "Scenario_1_A{}_C{}.fa".format(profileA, profileC))
-
-                        # set up detection on the simulated alignment
-                        detArgvDynamic = detArgvStatic + [
-                                   "-t", contArgs.tree,
-                                   "-aa", simAlgtPath,
-                                   "-o", simOutDir,
-                                   "-m", str(row["Scenario"]),
-                                         ] + detArgv # add additional site-detect args from command line
-                        # error will be thrown if any of these are specified redundantly at the command line
-
-                        # store the Popen object for polling
-                        subprocs[i * 2 + type] = subprocess.Popen(detArgvDynamic)
-                        # wait 5 seconds before trying to spawn any more subprocesses
-                        sleep(2)
-
-    # wait for all the subprocs to finish
-    for subproc in subprocs:
-        subproc.wait()
-
-    for i, row in newSims.iterrows():
-
-        # recreate from DF all this info used above:
         profileA = int(row["CAT_Anc"])
         profileC = int(row["CAT_Con"])
         scenStr = row["Scenario"]
         simIDStr = "A{}_C{}_{}".format(profileA, profileC, scenStr)
-        #logger.info("Simulation {}/{}: {}".format(i + 1, numSims, simIDStr))
+        logger.info("Simulation {}/{}: {}".format(i+1, numSims, simIDStr))
 
         # sanitize simulation identifier for use as a directory name
         # it might later be necessary to just call the directory "Sim_i"
         # if the dirnames get too long
-        # simIDStr = simIDStr.replace('/', '_').replace(',', "-")
-        simIDStr = "sim_{}_{}".format(i, dateTime) # dateTime is static within this function
+        #simIDStr = simIDStr.replace('/', '_').replace(',', "-")
+        simIDStr = "sim_{}_{}".format(i, dateTime)
         # make output dir
         simOutDir = os.path.join(simDir, simIDStr)
+        try:
+            os.mkdir(simOutDir)
+        except:
+            pass
 
-        # retrieve FPR results table (2nd run)
+        simArgvDynamic = simArgvStatic + [
+            "-o", simOutDir,
+            "-m", str(row["Scenario"]),
+            "-m_sampled_couple", str(profileA), str(profileC),
+            ]
+
+        # simulate the alignment
+        subprocess.call(simArgvDynamic)
+
+        # detect on both NEGATIVE, POSITIVE algts for Type I, II error
+        detArgvStatic = ["pcoc_det.py", # program call
+                         "-f", "-1", # don't waste time filtering output
+                         ]
+
+        # a clumsy way to make sure detect results don't end up in the sim directory:
+        sleep(1) # since they are named using dateTime
+        # iterate over negative, then positive
+        for type, profileC in enumerate((int(row["CAT_Anc"]), int(row["CAT_Con"]))):
+            # retrieve the simulated alignment
+            simAlgtPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[0], "Tree_1/sequences/Scenario_1",
+                                       "Scenario_1_A{}_C{}.fa".format(profileA, profileC))
+
+            # set up detection on the simulated NEGATIVE alignment
+            detArgvDynamic = detArgvStatic + [
+                       "-t", contArgs.tree,
+                       "-aa", simAlgtPath,
+                       "-o", simOutDir,
+                       "-m", str(row["Scenario"]),
+                             ] + detArgv # add additional site-detect args from command line
+            # error will be thrown if any of these are specified redundantly at the command line
+
+            subprocess.call(detArgvDynamic)
+
+        # retrieve FPR results table (2nd-latest run)
         simResultsTypeIPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[1], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileA))
         simResultsTypeI = pd.read_table(simResultsTypeIPath)
+
         # generate an error curve from it
         errorCurveTypeI = genErrorCurve(simResultsTypeI["PCOC"], 0b0)
-        # retrieve FNR results table (latest run; 2nd or 3rd)
-        # in stationary sites, are there just 2 subdirectories? (hence [-1])
-        simResultsTypeIIPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[-1], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileC))
+
+        # retrieve FNR results table (latest run)
+        simResultsTypeIIPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[2], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileC))
         simResultsTypeII = pd.read_table(simResultsTypeIIPath)
+
         # generate an error curve from it
         errorCurveTypeII = genErrorCurve(simResultsTypeII["PCOC"], 0b1)
+
         # and pickle it in a file
         picklePath = os.path.join(pickleDir, simIDStr + ".conf")
         pickleErrorCurve(errorCurveTypeI, errorCurveTypeII, simArgs, tree_newick, (profileA, profileC), row["Scenario"], picklePath)
+
         # get confidence thresholds and add them to newSims DF
         #newSims.iloc[i, newSims.columns.get_loc("PP_Threshold_TypeI")] = getConfThresholds(errorCurveTypeI, alpha)
         # .at[] allows insertion of a list into DF
         newSims.at[i, "PP_Threshold_TypeI"] = getConfThresholds(errorCurveTypeI, alpha)
         newSims.at[i, "PP_Threshold_TypeII"] = sorted(getConfThresholds(errorCurveTypeII, beta), reverse = True)
+
         if not contArgs.sim_no_cleanup:
             # delete all sim files besides the error curve
             rmtree(simOutDir)
@@ -1441,13 +1369,6 @@ def findMinDiff(arr):
     # Return min diff
     return float(diff)
 
-### Poll return status of a Popen object
-# if not a Popen object, return the argument unchanged
-def safePoll(pop):
-    if isinstance(pop, subprocess.Popen):
-        return pop.poll()
-    else:
-        return pop
 
 ### Rank val in iterable seri
 # has a built-in sort
@@ -1465,24 +1386,13 @@ def rank(val, seri):
 # rank() wrapper that takes positive and negative cutoffs
 # and returns a signed sig level
 def rankPosNeg(val, seriPos, seriNeg):
-
     # check if it's positive
-    sigLevelPos = rank(val, seriPos)
-
+    sigLevel = rank(val, seriPos)
     # check if it's negative
-    if isinstance(seriNeg, list):
-        sigLevelNeg = rank(val, seriNeg) - len(seriNeg)
-    # if only one negative sigLevel
-    else:
-        sigLevelNeg = rank(val, seriNeg) - 1
-
-    # if PP is in the overlap zone or the gap
-    if (sigLevelPos > 0 and sigLevelNeg < 0) or (sigLevelPos == sigLevelNeg == 0):
-        sigLevel = 0
-    else:
-        # return the one that is not 0!
-        sigLevel = [i for i in (sigLevelPos, sigLevelNeg) if i != 0][0]
-
+    if not sigLevel and isinstance(seriNeg, list):
+        sigLevel = rank(val, seriNeg) - len(seriNeg)
+    elif not sigLevel:
+        sigLevel = rank(val, seriNeg) - 1
     return sigLevel
 
 ### Number tree nodes for consistent reference
