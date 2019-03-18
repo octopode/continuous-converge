@@ -102,7 +102,7 @@ def parse_args(argv):
     Options.add_argument('--sim_no_cleanup', action="store_true", help="Set to retain all the sequence sim and error estimation siles")
     Options.add_argument('-s', '--call_stationary', type=int, choices=(None,0,-1), default=None,
                          help="Override significance level of sites with stationary pairs of ML profiles. None -> bootstrap, 0 -> call indeterminate, -1 -> call negative")
-    Options.add_argument('-k', '--key_seq', type=list, default=[], help="Names of key sequences on which to index the output columns")
+    Options.add_argument('-k', '--key_seq', type=str, nargs='*', default=None, help="Names of key sequences on which to index the output columns")
     Options.add_argument('-fig', '--figure', type=int, default=None, help="Figure elements to output. 0 -> Manhattan with alignment; 1 -> Manhattan; 2 -> Shaded alignment")
     Options.add_argument('-pp', '--pp_thres', type=list, default=[0.8, 0.9, 0.95], help="PP thresholds to highlight in output")
     #Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
@@ -299,8 +299,8 @@ def main(contArgs, detArgv, simArgs, simArgv):
     # remove scenarios with too few convergent events
     scenarios = minTransitionsFilter(scenarios, contArgs.min_events)
 
-    scenDir = contArgs.output + "/Scenarios"
-    simDir = contArgs.output + "/Simulations"
+    scenDir = os.path.abspath(contArgs.output + "/Scenarios")
+    simDir = os.path.abspath(contArgs.output + "/Simulations")
 
     ### Draw trees depicting convergent scenarios
 
@@ -397,7 +397,8 @@ def main(contArgs, detArgv, simArgs, simArgv):
 
         # wait for all the subprocs to finish
         for subproc in subprocs:
-            subproc.wait()
+            if isinstance(subproc, subprocess.Popen):
+                subproc.wait()
 
         # END DETECT LOOP #
 
@@ -576,7 +577,7 @@ def main(contArgs, detArgv, simArgs, simArgv):
             # check that fully conserved sites call properly
             if plotDf.loc[i, "ConservedPct"] == 100 and plotDf.loc[i, "SigLevel"] > -1:
                 # issue a warning if they do not
-                logger.warning("Site {} is fully conserved, but calls with significance level {}.\nConsider using more bootstrap replicates."
+                logger.debug("Site {} is fully conserved, but calls with significance level {}.\nConsider using more bootstrap replicates."
                                .format(i+1, plotDf.loc[i, "SigLevel"]))
                 plotDf.at[i, "SigLevel"] = -1
 
@@ -586,9 +587,11 @@ def main(contArgs, detArgv, simArgs, simArgv):
                 if plotDf.loc[i, "CAT_Anc"] == plotDf.loc[i, "CAT_Con"]:
                     #plotDf.at[i, "PP_Max"] = np.nan
                     plotDf.at[i, "PP_Threshold_TypeI"] = []
-                    plotDf.at[i, "PP_Threshold_TypeII"] = []
                     plotDf.at[i, "SigLevel"] = contArgs.call_stationary
-
+                    if contArgs.call_stationary == 0:
+                        plotDf.at[i, "PP_Threshold_TypeII"] = []
+                    elif contArgs.call_stationary < 0:
+                        plotDf.at[i, "PP_Threshold_TypeII"] = [plotDf.loc[i, "PP_Max"]] + ([0] * (len(contArgs.sim_beta_vals) - 1))
 
     # get basename of the alignment to name outfiles after
     # should change this to basename of the trait file, since doing multiple traits
@@ -932,6 +935,7 @@ def consolidatePCOCOutput(scenarios, scenDir, aa_align):
 
     for cutoff in sorted(scenarios.keys()):
 
+        # paw thru the stored results for the most recent set with matching alignment name
         try:
             subDir = scenDir + '/' + str(cutoff).replace('.','_')
             latestRun = sorted(os.listdir(subDir))[-1]
@@ -1052,7 +1056,7 @@ def loadSavedSims(pickleDir, tree_newick, simArgs, alpha = [0.10, 0.05, 0.01], b
                 pickleCheckList.append(curveParser.getint("sim_args", key) >= value)
             except:
                 # if one of the passed options is not stored in the pickle
-                logger.warning("{} is not in pickle {}!\nAnalysis proceeds, but consider stashing your pickles.".format(key, file))
+                logger.debug("{} is not in pickle {}!\nAnalysis proceeds, but consider stashing your pickles.".format(key, file))
                 pickleCheckList.append(True)
                 pass
 
@@ -1079,6 +1083,8 @@ def loadSavedSims(pickleDir, tree_newick, simArgs, alpha = [0.10, 0.05, 0.01], b
         # empty default DF
         simsCatalog = pd.DataFrame(columns=["Scenario", "CAT_Anc", "CAT_Con", "PP_Threshold_TypeI", "PP_Threshold_TypeII"])
 
+    logger.info("Loaded {} pickled simulations from {}.".format(simsCatalog.shape[0], pickleDir))
+
     return simsCatalog
 
 # run simulations as requested in the passed pd.DataFrame()
@@ -1103,24 +1109,6 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
     # error will be thrown if any of these are specified redundantly at the command line
 
     # SIMULATE LOOP #
-    # this would be the place to multithread
-
-    '''
-    ## this is just an example queueing loop put here for reference
-    # now all the commands are ready
-    subprocs = [False] * len(scenarios)
-    for num, detArgvDynamic in enumerate(detArgvsDynamic):
-        while subprocs[num] is not None and subprocs[num] is False:  # code for not started
-            # if the number of running processes is less than max
-            if sum([safePoll(i) is None for i in subprocs]) < contArgs.instances:
-                # start up another one
-                subprocs[num] = subprocess.Popen(detArgvDynamic)
-                # this ends the while loop and moves up to the for loop to stage the next call
-
-    # wait for all the subprocs to finish
-    for subproc in subprocs:
-        subproc.wait()
-    '''
 
     newSims.reset_index(inplace = True)
     numSims = newSims.shape[0]
@@ -1171,8 +1159,10 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
 
                 # iterate over negative, then positive
                 for type, profileC in enumerate((int(row["CAT_Anc"]), int(row["CAT_Con"]))):
-                    # if we're dealing with a neutral site
+                    # if we're dealing with a stationary site
                     if profileA == profileC and type == 1:
+                        # symlink the pos dir to the neg dir
+                        #os.symlink(os.path.join(simOutDir, "neg"), os.path.join(simOutDir, "pos"))
                         # the detection has already been done, so set job status to done and move on
                         subprocs[i * 2 + type] = True
                     else:
@@ -1180,11 +1170,19 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
                         simAlgtPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[0], "Tree_1/sequences/Scenario_1",
                                                    "Scenario_1_A{}_C{}.fa".format(profileA, profileC))
 
+                        # make _another_ subdirectory so the det jobs don't trip over each other
+                        if type == 0:
+                            detOutDir = os.path.join(simOutDir, "neg")
+                            os.mkdir(detOutDir)
+                        elif type == 1:
+                            detOutDir = os.path.join(simOutDir, "pos")
+                            os.mkdir(detOutDir)
+
                         # set up detection on the simulated alignment
                         detArgvDynamic = detArgvStatic + [
                                    "-t", contArgs.tree,
                                    "-aa", simAlgtPath,
-                                   "-o", simOutDir,
+                                   "-o", detOutDir,
                                    "-m", str(row["Scenario"]),
                                          ] + detArgv # add additional site-detect args from command line
                         # error will be thrown if any of these are specified redundantly at the command line
@@ -1196,7 +1194,8 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
 
     # wait for all the subprocs to finish
     for subproc in subprocs:
-        subproc.wait()
+        if isinstance(subproc, subprocess.Popen):
+            subproc.wait()
 
     for i, row in newSims.iterrows():
 
@@ -1204,7 +1203,6 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
         profileA = int(row["CAT_Anc"])
         profileC = int(row["CAT_Con"])
         scenStr = row["Scenario"]
-        simIDStr = "A{}_C{}_{}".format(profileA, profileC, scenStr)
         #logger.info("Simulation {}/{}: {}".format(i + 1, numSims, simIDStr))
 
         # sanitize simulation identifier for use as a directory name
@@ -1216,16 +1214,22 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
         simOutDir = os.path.join(simDir, simIDStr)
 
         # retrieve FPR results table (2nd run)
-        simResultsTypeIPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[1], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileA))
+        detOutDir = os.path.join(simOutDir, "neg")
+        simResultsTypeIPath = os.path.join(simOutDir, detOutDir, os.listdir(detOutDir)[0], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileA))
         simResultsTypeI = pd.read_table(simResultsTypeIPath)
         # generate an error curve from it
         errorCurveTypeI = genErrorCurve(simResultsTypeI["PCOC"], 0b0)
-        # retrieve FNR results table (latest run; 2nd or 3rd)
-        # in stationary sites, are there just 2 subdirectories? (hence [-1])
-        simResultsTypeIIPath = os.path.join(simOutDir, sorted(os.listdir(simOutDir))[-1], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileC))
-        simResultsTypeII = pd.read_table(simResultsTypeIIPath)
-        # generate an error curve from it
-        errorCurveTypeII = genErrorCurve(simResultsTypeII["PCOC"], 0b1)
+        # if not a stationary sim
+        if profileA != profileC:
+            # retrieve FNR results table
+            detOutDir = os.path.join(simOutDir, "pos")
+            simResultsTypeIIPath = os.path.join(simOutDir, detOutDir, os.listdir(detOutDir)[0], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileC))
+            simResultsTypeII = pd.read_table(simResultsTypeIIPath)
+            # generate an error curve from it
+            errorCurveTypeII = genErrorCurve(simResultsTypeII["PCOC"], 0b1)
+        # if it is stationary, type II error curve makes no sense
+        else:
+            errorCurveTypeII = {1:1}
         # and pickle it in a file
         picklePath = os.path.join(pickleDir, simIDStr + ".conf")
         pickleErrorCurve(errorCurveTypeI, errorCurveTypeII, simArgs, tree_newick, (profileA, profileC), row["Scenario"], picklePath)
@@ -1306,36 +1310,6 @@ def getConfThresholds(errorCurve, errorRates):
 
     return ppThresholds
 
-### return list of columns of an alignment that are not gaps in the key sequence
-def keyAlignmentColumns(algt, keySeqID):
-
-    algtLength = algt.get_alignment_length()
-
-    # Get the key sequence
-    for record in algt:
-        if record.id == keySeqID:
-            keySeq = record.seq
-
-    mappedCols = [None] * len(str(keySeq).replace('-', ''))
-    keyIndex = 0
-    for i in range(algtLength):  # only iterate over columns that are not gaps in target seq
-        if keySeq[i] != "-":  # meaning anything except gaps
-            mappedCols[keyIndex] = i + 1  # map the alignment column to the key column. Gotta shift the index!
-            keyIndex += 1
-
-    return mappedCols
-
-### Find the start of all (possibly-overlapping) instances of needle in haystack
-# this generator from https://stackoverflow.com/questions/11122291/python-find-char-in-string-can-i-get-all-indexes
-def findOffsets(haystack, needle):
-
-    offs = -1
-    while True:
-        offs = haystack.find(needle, offs+1)
-        if offs == -1:
-            break
-        else:
-            yield offs
 
 def reindexDataframe(df, ali, keyID):
 
@@ -1362,28 +1336,45 @@ def reindexAlignment(ali, keyID):
     # get the key sequence
     seqIDs = [record.id for record in ali]
     keySeq = ali[seqIDs.index(keyID)].seq
-    # "extra gap" on the end makes sure we capture the last ungapped part
-    gapIndices = list(findOffsets(keySeq, '-')) + [len(keySeq)]
+    aliLength = ali.get_alignment_length()
 
-    # get slices of the alignment that are not gapped in the keyseq
     aliSlices = []
-    lastGap = 0
-    for gap in gapIndices:
-        # if not a consecutive gap
-        if gap > lastGap + 1:
-            # get a slice between and excluding this gap and the last
-            aliSlices.append(ali[ : , lastGap + 1: gap])
-        # store current gap index
-        lastGap = gap
-    #TEST
-    #for chunk in aliSlices:
-    #    print type(chunk)
-    #    AlignIO.write(chunk, sys.stdout, "fasta")
+    for i in range(aliLength):  # only iterate over columns that are not gaps in target seq
+        if keySeq[i] != "-":  # meaning anything except gaps
+            aliSlices.append(ali[:, i: i+1])
 
-    # put the slices back together. + operator should work!
-    # summation of objects requires changing the default starting value to a compatible object
-    # in this case, an empty slice of our alignment with the same seqIDs
     return sum(aliSlices, ali[:,0:0])
+
+### return list of columns of an alignment that are not gaps in the key sequence
+def keyAlignmentColumns(algt, keySeqID):
+
+    algtLength = algt.get_alignment_length()
+
+    # Get the key sequence
+    for record in algt:
+        if record.id == keySeqID:
+            keySeq = record.seq
+
+    mappedCols = [None] * len(str(keySeq).replace('-', ''))
+    keyIndex = 0
+    for i in range(algtLength):  # only iterate over columns that are not gaps in target seq
+        if keySeq[i] != "-":  # meaning anything except gaps
+            mappedCols[keyIndex] = i  # map the alignment column to the key column.
+            keyIndex += 1
+
+    return mappedCols
+
+### Find the start of all (possibly-overlapping) instances of needle in haystack
+# this generator from https://stackoverflow.com/questions/11122291/python-find-char-in-string-can-i-get-all-indexes
+def findOffsets(haystack, needle):
+
+    offs = -1
+    while True:
+        offs = haystack.find(needle, offs+1)
+        if offs == -1:
+            break
+        else:
+            yield offs
 
 ### Utility function that does a merge, then consolidates duplicated columns.
 ### It does this by choosing the first truthy value in the pair of columns for each row.
