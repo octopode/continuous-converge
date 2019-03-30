@@ -96,7 +96,7 @@ def parse_args(argv):
                             help="max gap allowed to take into account a site (in %%), must be between 0 and 100 (default:5%%)",
                             default=5)
     Options.add_argument('--sim', action="store_true", help="Set to run post hoc simulation")
-    #Options.add_argument('--sim_pp_thres', type=float, default=0.8, help="Set PCOC PP threshold for running a post hoc simulation, 0.0001 = all sites")
+    Options.add_argument('--sim_pp_thres', type=float, default=0.5, help="Set PCOC PP threshold for running a post hoc simulation, 0.0001 = all sites")
     Options.add_argument('--sim_alpha_vals', type=float, nargs='*', default=[0.10, 0.05, 0.01], help="alpha values to test in post hoc simulations")
     Options.add_argument('--sim_beta_vals', type=float, nargs='*', default=[0.6, 0.8, 0.9], help="beta values to test in post hoc simulations")
     Options.add_argument('--sim_no_cleanup', action="store_true", help="Set to retain all the sequence sim and error estimation siles")
@@ -231,6 +231,10 @@ def parse_args(argv):
 
 
 def main(contArgs, detArgv, simArgs, simArgv):
+    # internal switches
+    reyMethod = "PCOC"
+    #reyMethod = "PC"
+
     ##########
     # inputs #
     ##########
@@ -420,10 +424,10 @@ def main(contArgs, detArgv, simArgs, simArgv):
     metaDf = consolidatePCOCOutput(scenarios, scenDir, contArgs.aa_align)
 
     # recast the molten/long-format metaDF to wide format
-    metaDfWide = metaDf.pivot(columns="Cutoff", index="Sites", values="PCOC")
+    metaDfWide = metaDf.pivot(columns="Cutoff", index="Sites", values=reyMethod)
 
     # get the max PPs and corresponding cutoffs
-    plotDf = maxPPScenarios(metaDf, methodPP = "PCOC")
+    plotDf = maxPPScenarios(metaDf, methodPP = reyMethod)
 
     numSites = plotDf.shape[0]
 
@@ -453,16 +457,15 @@ def main(contArgs, detArgv, simArgs, simArgv):
         # if this gets too heavy I can save/read the matrices to disk
         logger.info("Recovering ML CATegories for sites...")
         # make a set of just the relevant cutoffs
-        #maxPPcutoffsSet = set([cutoff for cutoff in simDf["Cutoff"] if cutoff >= contArgs.sim_pp_thres])
-        # ^this is not right!
-        #maxPPcutoffsSet = set(plotDf.loc[plotDf["PP_Max"] >= contArgs.sim_pp_thres]["Cutoff"])
-        maxPPcutoffsSet = set(plotDf["Cutoff"])
-        print maxPPcutoffsSet
+        maxPPcutoffsSet = set(plotDf.loc[plotDf["PP_Max"] >= contArgs.sim_pp_thres]["Cutoff"])
+        #maxPPcutoffsSet = set(plotDf["Cutoff"])
+        #TEST
+        print >> sys.stderr, maxPPcutoffsSet
         # load 3D matrices for those cutoffs
         # this is a slow step, probably from all the file handling
         # its complexity should scale with number of cutoffs, not sites.
-        lnLMatricesPCOC = {cutoff: consolidateBPPOutput(cutoff, scenDir, withOneChange=True) for cutoff in maxPPcutoffsSet}
-        #lnLMatricesPC = {cutoff: consolidateBPPOutput(cutoff, scenDir, withOneChange=False) for cutoff in maxPPcutoffsSet}
+        lnLMatricesPCOC = {cutoff: consolidateBPPOutput(cutoff, scenDir, aa_align=contArgs.aa_align, withOneChange=True) for cutoff in maxPPcutoffsSet}
+        lnLMatricesPC = {cutoff: consolidateBPPOutput(cutoff, scenDir, aa_align=contArgs.aa_align, withOneChange=False) for cutoff in maxPPcutoffsSet}
 
         # iterate over the sites and assign profiles and model lnLs to each
         '''
@@ -475,10 +478,13 @@ def main(contArgs, detArgv, simArgs, simArgv):
         '''
         for site in range(plotDf.shape[0]):
             # if the site made the cut for simulation
-            #if plotDf["PP_Max"].tolist()[site] >= contArgs.sim_pp_thres:
+            if plotDf["PP_Max"].tolist()[site] >= contArgs.sim_pp_thres:
                 # get the profiles and the model lnL and tack them on the row
-            plotDf.loc[site + 1, "CAT_Anc"], plotDf.loc[site + 1, "CAT_Con"], plotDf.loc[site + 1, "lnL_PCOC"] = getMLCATProfiles(site, lnLMatricesPCOC[plotDf["Cutoff"].tolist()[site]])
-                #plotDf.loc[site + 1, "CAT_Anc_PC"], plotDf.loc[site + 1, "CAT_Con_PC"], plotDf.loc[site + 1, "lnL_PC"] = getMLCATProfiles(site, lnLMatricesPC[cutoff])
+                if reyMethod == "PCOC":
+                    plotDf.loc[site + 1, "CAT_Anc"], plotDf.loc[site + 1, "CAT_Con"], plotDf.loc[site + 1, "lnL_PCOC"] = getMLCATProfiles(site, lnLMatricesPCOC[plotDf["Cutoff"].tolist()[site]])
+                elif reyMethod == "PC":
+                    plotDf.loc[site + 1, "CAT_Anc"], plotDf.loc[site + 1, "CAT_Con"], plotDf.loc[site + 1, "lnL_PC"] = getMLCATProfiles(site, lnLMatricesPC[plotDf["Cutoff"].tolist()[site]])
+                    #plotDf.loc[site + 1, "CAT_Anc_PC"], plotDf.loc[site + 1, "CAT_Con_PC"], plotDf.loc[site + 1, "lnL_PC"] = getMLCATProfiles(site, lnLMatricesPC[cutoff])
 
         # display profile numbers as ints in the table
         # but this crashes when there are NaNs :/
@@ -530,7 +536,7 @@ def main(contArgs, detArgv, simArgs, simArgv):
         newSims = uniqueSims.loc[uniqueSims["PP_Threshold_TypeI"].isnull()]
         # run them and update the table with confidence thresholds
         #print "missing sims"
-        newSims = runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = contArgs.sim_alpha_vals, beta = contArgs.sim_beta_vals)
+        newSims = runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, reyMethod=reyMethod, alpha = contArgs.sim_alpha_vals, beta = contArgs.sim_beta_vals)
 
         # replace NaNs in threshold cols with empty list
         for row in uniqueSims.loc[uniqueSims.PP_Threshold_TypeI.isnull(), 'PP_Threshold_TypeI'].index:
@@ -615,6 +621,10 @@ def main(contArgs, detArgv, simArgs, simArgv):
             #plotDfMapped["Sites"] = range(1, len(plotDfMapped.index) + 1)
             plotDfMapped = reindexDataframe(plotDf, ali, sp)
 
+            # add Sites index
+            plotDfMapped["Sites"] = range(1, plotDfMapped.shape[0] + 1)
+            plotDfMapped.set_index("Sites", inplace=True)
+
             # save results table keyed on sp
             tsvPath = os.path.join(contArgs.output, aliBasename + "_key-" + sp + "_results.tsv")
             plotDfMapped.to_csv(tsvPath, sep='\t')
@@ -637,6 +647,10 @@ def main(contArgs, detArgv, simArgs, simArgv):
     # Print master data table. Note that it is transpose of the table sent to heatMapDF()
     # metaDfWide.to_csv(contArgs.master_table, sep='\t')
     tsvPath = os.path.join(contArgs.output, aliBasename + "_results.tsv")
+
+    # add Sites index
+    plotDf["Sites"] = range(1, plotDf.shape[0] + 1)
+    plotDf.set_index("Sites", inplace=True)
 
     plotDf.to_csv(tsvPath, sep='\t')
     # tell user where it was put
@@ -933,19 +947,28 @@ def consolidatePCOCOutput(scenarios, scenDir, aa_align):
     # get the output file from the latest run
     ppFileBasename = os.path.splitext(os.path.basename(aa_align))[:-1][0] + ".results.tsv"
 
+    # for each cutoff
     for cutoff in sorted(scenarios.keys()):
-
+        found = False
+        subDir = scenDir + '/' + str(cutoff).replace('.', '_')
         # paw thru the stored results for the most recent set with matching alignment name
-        try:
-            subDir = scenDir + '/' + str(cutoff).replace('.','_')
-            latestRun = sorted(os.listdir(subDir))[-1]
-            ppFile = subDir + "/" + latestRun + "/" + ppFileBasename
-            cutoffPPs = pd.read_table(ppFile)
-            # store the cutoff and the scenario string
-            cutoffPPs["Cutoff"] = cutoff
-            cutoffPPs["Scenario"] = scenarios[cutoff]
-            metaDf = metaDf.append(cutoffPPs)
-        except:
+        for runDir in sorted(os.listdir(subDir), reverse=True):
+            #latestRun = sorted(os.listdir(subDir))[-1]
+            # if the results file matches the alignment
+            if ppFileBasename in os.listdir(os.path.join(subDir, runDir)):
+                found = True
+                # load it in
+                #ppFile = subDir + "/" + runDir + "/" + ppFileBasename
+                ppFile = os.path.join(subDir, runDir, ppFileBasename)
+                logger.info("Loading PPs for cutoff {} from {}.".format(cutoff, ppFile))
+                cutoffPPs = pd.read_table(ppFile)
+                # store the cutoff and the scenario string
+                cutoffPPs["Cutoff"] = cutoff
+                cutoffPPs["Scenario"] = scenarios[cutoff]
+                metaDf = metaDf.append(cutoffPPs)
+                break
+        # if the search is fruitless
+        if not found:
             logger.warning("Posterior probabilities not loaded for cutoff {}.".format(cutoff))
 
     return metaDf
@@ -971,7 +994,7 @@ def maxPPScenarios(metaDf, methodPP="PCOC"):
 
 
 ### Gather up the .infos files for a particular cutoff in ScenDir and put the lnL data into a 3D array
-def consolidateBPPOutput(cutoff, scenDir, withOneChange = True):
+def consolidateBPPOutput(cutoff, scenDir, aa_align, withOneChange = True):
 
     # search criterion for files to load from the Estimations dir
     if withOneChange:
@@ -979,14 +1002,27 @@ def consolidateBPPOutput(cutoff, scenDir, withOneChange = True):
     else:
         searchPattern = "noOneChange.infos"
 
-    try:
-        subDir = scenDir + '/' + str(cutoff).replace('.', '_')
+    # get the name of the output file
+    ppFileBasename = os.path.splitext(os.path.basename(aa_align))[:-1][0] + ".results.tsv"
+    # name of subdirectory for applicable cutoff
+    subDir = scenDir + '/' + str(cutoff).replace('.', '_')
+    found = False
+
+    # paw thru the stored results for the most recent set with matching alignment name
+    for runDir in sorted(os.listdir(subDir), reverse=True):
         # run folders are named by numeric datetime, so last is most recent
-        latestRun = sorted(os.listdir(subDir))[-1]
-        estimsDir = subDir + "/" + latestRun + "/Estimations"
-        # get list of target filenames
-        lnLfnames = sorted([fname for fname in os.listdir(estimsDir) if fname.endswith(searchPattern)])
-    except:
+        #latestRun = sorted(os.listdir(subDir))[-1]
+        # if the results file matches the alignment
+        if ppFileBasename in os.listdir(os.path.join(subDir, runDir)):
+            found = True
+            #estimsDir = subDir + "/" + runDir + "/Estimations"
+            estimsDir = os.path.join(subDir, runDir, "Estimations")
+            logger.info("Recovering ML CATegories for cutoff {} from {}.".format(cutoff, estimsDir))
+            # get list of target filenames
+            lnLfnames = sorted([fname for fname in os.listdir(estimsDir) if fname.endswith(searchPattern)])
+            break
+
+    if not found:
         logger.warning("Log likelihoods not loaded for cutoff {}.".format(cutoff))
         return None
 
@@ -1088,7 +1124,7 @@ def loadSavedSims(pickleDir, tree_newick, simArgs, alpha = [0.10, 0.05, 0.01], b
     return simsCatalog
 
 # run simulations as requested in the passed pd.DataFrame()
-def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = [0.10, 0.05, 0.01], beta = [0.6, 0.8, 0.9]):
+def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, reyMethod="PCOC", alpha = [0.10, 0.05, 0.01], beta = [0.6, 0.8, 0.9]):
 
     dateTime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     tree = init_tree(contArgs.tree)
@@ -1218,7 +1254,7 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
         simResultsTypeIPath = os.path.join(simOutDir, detOutDir, os.listdir(detOutDir)[0], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileA))
         simResultsTypeI = pd.read_table(simResultsTypeIPath)
         # generate an error curve from it
-        errorCurveTypeI = genErrorCurve(simResultsTypeI["PCOC"], 0b0)
+        errorCurveTypeI = genErrorCurve(simResultsTypeI[reyMethod], 0b0)
         # if not a stationary sim
         if profileA != profileC:
             # retrieve FNR results table
@@ -1226,7 +1262,7 @@ def runSiteSims(newSims, contArgs, simArgv, simDir, pickleDir, simArgs, alpha = 
             simResultsTypeIIPath = os.path.join(simOutDir, detOutDir, os.listdir(detOutDir)[0], "Scenario_1_A{}_C{}.results.tsv".format(profileA, profileC))
             simResultsTypeII = pd.read_table(simResultsTypeIIPath)
             # generate an error curve from it
-            errorCurveTypeII = genErrorCurve(simResultsTypeII["PCOC"], 0b1)
+            errorCurveTypeII = genErrorCurve(simResultsTypeII[reyMethod], 0b1)
         # if it is stationary, type II error curve makes no sense
         else:
             errorCurveTypeII = {1:1}

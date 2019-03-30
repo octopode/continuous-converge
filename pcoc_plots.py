@@ -13,7 +13,7 @@ from Bio import AlignIO
 ### 0 plots everything
 ### 1 plots just the Manhattan
 ### 2 plots just the highlighted alignment
-def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, thresPP=None, blkBkgd=False,
+def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, thresPP=[0.8, 0.9, 0.95], blkBkgd=False,
                  width=24, height=8, xLabel="amino acid site", fontsize=None, outPath=None):
 
     if blkBkgd: plt.style.use('dark_background')
@@ -56,7 +56,7 @@ def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, thresPP=
 
 
 ### draw a Manhattan plot of sitewise PPs and confidence windows
-def manhattanPlot(df, thresPP=(0.8, 0.9), alpha=None, beta=None,
+def manhattanPlot(df, thresPP=[0.8, 0.9, 0.95], alpha=None, beta=None,
                   xLabel="amino acid site", xSpacing=10, blkBkgd=False, width=20, height=8, fontsize=None, outPath=None):
 
     # DataFrame column names for certain data
@@ -72,6 +72,7 @@ def manhattanPlot(df, thresPP=(0.8, 0.9), alpha=None, beta=None,
     # if typeIIPP < typeIPP then there are insufficient data to achieve the specified error rates at that site
     # force column names for vectorized functions
     df.rename(columns={typeIPP: typeIPP, typeIIPP: typeIIPP}, inplace=True)
+    # SORTING IS IMPORTANT DOWNSTREAM
     alpha = sorted(alpha, reverse=True)
     beta = sorted(beta)
     thresPP = [0] + thresPP
@@ -94,11 +95,11 @@ def manhattanPlot(df, thresPP=(0.8, 0.9), alpha=None, beta=None,
     plt.xlim(xlimits)
     # set up tick interval
     xTicks = [1] + range(xSpacing, max(x), xSpacing)
-    plt.xticks(xTicks, xTicks, fontsize=fontsize, horizontalalignment='center')
-    plt.yticks(fontsize=fontsize)
+    plt.xticks(xTicks, xTicks, fontsize=fontsize*2, horizontalalignment='center')
+    plt.yticks(fontsize=fontsize*2)
     # label axes
-    plt.xlabel(xLabel, fontsize=fontsize)
-    plt.ylabel("PCOC PP", fontsize=fontsize)
+    plt.xlabel(xLabel, fontsize=fontsize*4)
+    plt.ylabel("PCOC PP", fontsize=fontsize*4)
 
 
     if simErrorControl:
@@ -111,19 +112,37 @@ def manhattanPlot(df, thresPP=(0.8, 0.9), alpha=None, beta=None,
         baseSolidness = 0.6
 
         # for each set of confidence thresholds
-        # (len(alpha) should = len(beta))
         for i in range(len(alpha)):
             # extract pair of confidence thresholds
             ymin = np.array(df["alpha_"+str(alpha[i])])
-            ymax = np.array(df["beta_"+str(beta[i])])
+            #ymin = np.array(df["alpha_" + str(i)])
 
             # and plot them
             solidness = baseSolidness + i/len(alpha) * (1 - baseSolidness)
             plt.bar(x, bottom=ymin, height=(1 - ymin), width=0.8, color=basecolorAlpha, alpha=solidness)
+
+        for i in range(len(beta)):
+            # extract pair of confidence thresholds
+            ymax = np.array(df["beta_"+str(beta[i])])
+            #ymax = np.array(df["beta_" + str(i)])
+
+            # and plot them
+            solidness = baseSolidness + i/len(beta) * (1 - baseSolidness)
             plt.bar(x, bottom=0, height=ymax, width=0.8, color=basecolorBeta, alpha=solidness)
 
         # plot PCOC PPs
-        plt.scatter(x, y, s=400, color="black", zorder=3)  # s = area of 400 pt^2
+        ax = plt.gca()
+        #xUnit = 12
+        # width of a single unit in pixels
+        xUnit = (ax.transData.transform((1, 0)) - ax.transData.transform((0, 0)))[0]
+        #print >> sys.stderr, "1 x unit={}".format(xUnit)
+
+        #pointArea = 200.0/df.shape[0]
+        #if pointArea < 1:
+        #    pointArea = 1
+        #else:
+        #    pointArea = 2.25*float(round(pointArea))
+        plt.scatter(x, y, s=8*xUnit**2, marker="D", color="black", zorder=3)  # s = area of 400 pt^2
 
     else:
         # constant threshold mode
@@ -156,7 +175,7 @@ def manhattanPlot(df, thresPP=(0.8, 0.9), alpha=None, beta=None,
 
 ### Draw an amino acid alignment with called columns and their trait cutoffs highlighted
 ### Number of red asterisks drawn on the cutoff indicates level of significance
-def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", highlightInconclusive = False, blkBkgd=False, width=20, height=8, fontsize=None, outPath=None):
+def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", blkBkgd=False, width=20, height=8, fontsize=None, outPath=None):
 
     if blkBkgd: plt.style.use('dark_background')
 
@@ -165,6 +184,8 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", highlight
     pcocPP = "PP_Max"
     # categorical significance level
     sigLevel = "SigLevel"
+    # trait cutoff
+    cutoff = "Cutoff"
     '''
     # deprecate these - 20190313
     # PP lower thresholds for Type I error
@@ -181,7 +202,7 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", highlight
 
     # plot basic MSA
     ali2plt(ali, fontsize=fontsize, rowSpacing=fontsize/10)
-    plt.xlabel(xLabel, fontsize=fontsize)
+    plt.xlabel(xLabel, fontsize=fontsize*4)
 
     # push this back to the parent script and have it fed to the plotting routine
     # add a significance level column to the dataFrame: 0 (not sig) -> index of the most stringent alpha cutoff
@@ -196,6 +217,29 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", highlight
     #fig.colorbar(im, ax=ax)
 
     # draw a patch with asterisks on every significant cutoff
+    ax = plt.gca()
+    xUnit = (ax.transData.transform((1, 0)) - ax.transData.transform((0, 0)))[0]
+    x = [s + 0.5 for s in range(df.shape[0]) if df[sigLevel].tolist()[s] > 0]
+    sigCuts = [df[cutoff].tolist()[j] for j in range(df.shape[0]) if df[sigLevel].tolist()[j] > 0]
+    sortCuts = sorted(tipTraits.values())
+    y = [rank(cut, sortCuts) for cut in sigCuts]
+    ## custom marker shape
+    rectMarker = [(-2, -0.5), (-2, 0.5), (2, 0.5), (2, -0.5)]
+    plt.scatter(x, y, s=3 * (xUnit ** 2), marker=rectMarker, color="black", zorder=4)
+    plt.scatter(x, y, s=(xUnit ** 2) / 16, marker="*", color="red", zorder=5)
+
+    # add markers at top of alignment
+    # x-coords are same as above
+    #x = [s + 0.5 for s in range(df.shape[0]) if df[sigLevel].tolist()[s] > 0]
+    ### push ylim up a little
+    plt.ylim((plt.ylim()[0], plt.ylim()[1] - 2))
+    ### to accommodate this
+    y = [plt.ylim()[1] + 0.5] * len(x)
+    plt.scatter(x, y, s=32 * xUnit ** 2, marker="v", color="red", zorder=6)  # s = area of 400 pt^2
+    ax.spines['top'].set_visible(False)
+    # fix x axis
+    plt.xlim((0, df.shape[0]))
+
 
     # save the plot
     if outPath:
@@ -265,24 +309,24 @@ def ali2plt(ali, rowSpacing=None, xSpacing=10, yLabel=None, blkBkgd=False, fonts
 
     # x-axis formatting
     xTicks = [1] + range(xSpacing, numSites-1, xSpacing)
-    plt.xticks([x - 0.5 for x in xTicks], xTicks, fontsize=fontsize, horizontalalignment='center')
+    plt.xticks([x - 0.5 for x in xTicks], xTicks, fontsize=fontsize*2, horizontalalignment='center')
 
     # y-axis formatting
     # This is needed to make the first row of the array correspond to 1st seq in MSA
     plt.gca().invert_yaxis()
-    plt.yticks([y + 0.5 for y in range(numSeqs)], seqNames, fontsize=fontsize, verticalalignment='center')
+    plt.yticks([y + 0.5 for y in range(numSeqs)], seqNames, fontsize=fontsize*2, verticalalignment='center')
     #ax.axes.get_yaxis().set_visible(False)
 
     #TODO: use pcolormesh(X, Y) to put breathing room between the aligned sequences
 
     # draw alignment
-    plt.pcolormesh(cellData, cmap=cm, norm=colors.Normalize(vmin=-0.5, vmax=19.5, clip=False), zorder = 1)
+    plt.pcolormesh(cellData, cmap=cm, norm=colors.Normalize(vmin=-0.5, vmax=20.5, clip=False), zorder = 1)
     # to check proper normalization of colorscale
     # fig.colorbar(im, ax=ax)
 
     # ylabel
     if not yLabel:
-        plt.ylabel('species', fontsize=fontsize)
+        plt.ylabel('species', fontsize=fontsize*4)
 
     # put letters on the alignment
     for x in range(numSites):
@@ -304,12 +348,12 @@ def breakOutThresholds(df, alpha, beta):
     if isinstance(alpha, float): beta = [beta]
     # split out the significance threshold lists
     for i, thres in enumerate(alpha):
-        df["alpha_" + str(thres)] = [j[i] if isinstance(j, list) else np.nan for j in df["PP_Threshold_TypeI"].tolist()]
+        df["alpha_" + str(thres)] = [j[i] if isinstance(j, list) and len(j) else np.nan for j in df["PP_Threshold_TypeI"].tolist()]
     for i, thres in enumerate(beta):
-        df["beta_" + str(thres)] = [j[i] if isinstance(j, list) else np.nan for j in df["PP_Threshold_TypeII"].tolist()]
+        df["beta_" + str(thres)] = [j[i] if isinstance(j, list) and len(j) else np.nan for j in df["PP_Threshold_TypeII"].tolist()]
 
     return df
-'''
+
 ### Rank val in iterable seri
 def rank(val, seri):
     if isinstance(seri, list):
@@ -320,7 +364,7 @@ def rank(val, seri):
         return rank
     else:
         return 0
-'''
+
 ### Create a discrete colormap for monochromatic light based on wavelength
 ### FPs are not monochromatic, so my work is not done here!
 def realRainbow():
