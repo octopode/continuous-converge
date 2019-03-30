@@ -246,3 +246,49 @@ def test_mergeFillNans():
     output = target.pd.DataFrame(output)[['A', 'B']] # establish column order; matters for assertion
 
     assert target.mergeFillNans(input1, input2, on=['B'])[['A', 'B']].equals(output)
+
+def test_reindexDataframe():
+
+    inputAlign = target.AlignIO.read("test_files/Converge7state_realAcids_all_gaps.fasta", "fasta")
+
+    inputDf = target.pd.DataFrame()
+    inputDf["Sites"] = range(1, 21)
+    inputDf["StringData"] = list("ABCDEFGHIJKLMNOPQRST")
+    inputDf["Floats"] = [i + 0.66 for i in reversed(range(20))]
+
+    output = target.pd.DataFrame()
+    output["Sites"] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    output["StringData"] = list("BCDEFGHJKLMNOS")
+    output["Floats"] = [18.66, 17.66, 16.66, 15.66, 14.66, 13.66, 12.66, 10.66, 9.66, 8.66, 7.66, 6.66, 5.66, 1.66]
+
+    #print# target.reindexDataframe(inputDf, inputAlign, "D")._data
+    #print output._data
+
+    # for some reason DataFrame.equals() was not working here (despite identical ._data attributes!)
+    # so I rolled my own
+    assert equalsRelaxed(target.reindexDataframe(inputDf, inputAlign, "D"), output)
+
+# a relaxed version of DataFrame.equals() that converts 2 passed DFs to TSV and compares them literally
+def equalsRelaxed(df1, df2):
+    return df1.to_csv(sep='\t') == df2.to_csv(sep='\t')
+
+def test_reindexAlignment():
+
+    input = target.AlignIO.read("test_files/Converge7state_realAcids_all_gaps.fasta", "fasta")
+    keyID = "D"
+
+    output = target.AlignIO.read("test_files/Converge7state_realAcids_all_D-degapped.fasta", "fasta")
+
+    #target.AlignIO.write(output, target.sys.stdout, "fasta")
+    #target.AlignIO.write(target.reindexAlignment(input, keyID), target.sys.stdout, "fasta")
+
+    # gotta compare FASTA strings, not objects
+    assert target.reindexAlignment(input, keyID).format("fasta") == output.format("fasta")
+
+# tests profile recovery.
+# the directory of 100 fake .infos files goes in; sitewise pairs of CATegories and max lnL values come out
+def test_getMLCATProfiles():
+
+    estimsDir =
+
+    outDf = target.pd.DataFrame()
