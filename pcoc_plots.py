@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import matplotlib.gridspec as gridspec
 from Bio import AlignIO
 
 ### draw PCOC.ontinuous master figure with the specified elements
@@ -14,15 +15,22 @@ from Bio import AlignIO
 ### 1 plots just the Manhattan
 ### 2 plots just the highlighted alignment
 def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, thresPP=[0.8, 0.9, 0.95], blkBkgd=False,
-                 width=24, height=8, xLabel="amino acid site", fontsize=None, outPath=None):
+                 width=24, height=6, xLabel="amino acid site", fontsize=None, outPath=None):
 
     if blkBkgd: plt.style.use('dark_background')
 
     if elements == 0:
+
         if not fontsize:
             fontsize = min(2 * height, 75 * width / len(df))
 
-        fig, ax = plt.subplots(2, 1)
+        # set up axes w/equal size
+        #fig, ax = plt.subplots(2, 1)
+        # set up axes w/adjustable height ratio
+        fig = plt.figure()
+        spec = gridspec.GridSpec(nrows=2, ncols=1, height_ratios=[1,2])
+        ax = [fig.add_subplot(spec[row, 0]) for row in range(2)]
+
         # plot Manhattan
         plt.subplot(ax[0])
         manhattanPlot(df, alpha=alpha, beta=beta, thresPP=thresPP, fontsize=fontsize)
@@ -232,7 +240,7 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", blkBkgd=F
     plt.scatter(x, y, s=3 * (xUnit ** 2), marker=rectMarker, color="black", zorder=4)
     plt.scatter(x, y, s=(xUnit ** 2) / 16, marker="*", color="red", zorder=5)
 
-    # add markers at top of alignment
+    # add triangle markers at top of alignment
     # x-coords are same as above
     #x = [s + 0.5 for s in range(df.shape[0]) if df[sigLevel].tolist()[s] > 0]
     ### push ylim up a little
