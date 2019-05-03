@@ -32,6 +32,9 @@ import time
 import logging
 import subprocess
 
+#MODIFIED 20190301 JRW
+# add /usr/local/bin to the path so script can pick this up
+sys.path.append("/usr/local/bin")
 import bpp_lib
 import events_placing
 import estim_data
@@ -116,12 +119,16 @@ Options_ali = parser.add_argument_group('Alignment simulation options')
 Options_ali.add_argument('-nb_sampled_couple', type=int,  metavar="INT",
                     help="For each convergent scenario, number of simulated alignment with different sampled couple of profiles (Ancestral/Convergent). (default: 1)",
                     default=1)
+#MODIFIED 20190301 JRW
+Options_ali.add_argument('-m_sampled_couple', type=int, nargs=2,
+                    help="Manually specified pair of profile numbers (Ancestral/Convergent). (default: None)",
+                    default=None)
 Options_ali.add_argument('-n_sites', type=int,  metavar="INT",
                     help="Number of simulated sites per alignment. (default: 100)",
                     default=100)
 Options_ali.add_argument('-CATX_sim', type=int, choices = [10,60],
                     help="Profile categories to simulate data (10->C10 or 60->C60). (default: 60)",
-                    default=60)
+                    default=10)
 Options_ali.add_argument('-min_dist_CAT', type=float, metavar="FLOAT",
                     help="Minimum distance between Ancestral and Convergent profiles to simulate the alignment (default: no limits)",
                     default=0)
@@ -240,7 +247,15 @@ if not os.path.exists(repbppconfig):
 bpp_lib.write_config(repbppconfig, estim=True, NbCat = args.CATX_sim)
 dist_C1_C2 =  pd.read_csv(repbppconfig+'/CATC'+str(args.CATX_sim)+'Distances.csv', index_col=0)
 
-lnf=glob.glob(args.tree_dir+"/*")
+#MODIFIED 20190301 JRW
+# if a tree *directory* is passed
+if os.path.isdir(args.tree_dir):
+    # get all the files in the dir
+    lnf = glob.glob(args.tree_dir+"/*")
+# if a single file is passed
+else:
+    # make it a list of 1 filename
+    lnf = [args.tree_dir,]
 
 flg=args.flg
 if flg == 1:
@@ -359,8 +374,10 @@ if args.manual_mode:
         manual_mode_nodes["T"].append(l_e[0])
         manual_mode_nodes["C"].extend(l_e[1:])
     if args.c_min > len(manual_mode_nodes["T"]):
+        # adjust minimum but only if necessary
         minTrans=len(manual_mode_nodes["T"])
     if args.c_max != len(manual_mode_nodes["T"]):
+        # adjust maximum to accommodate manual scenario
         maxTrans = len(manual_mode_nodes["T"])
 
 
@@ -483,7 +500,9 @@ def mk_simu((i, tree_filename, OutDirNamePrefixTree), n_try = 0) :
         logger.info("%s - Addition of noise in the alignment: No", name0_info)
         metadata_simu_dico["AliNoise"] = "No"
 
-    if args.c == 0:
+    if args.manual_mode: # ADDED 20190316 JRW
+        n_events = len(manual_mode_nodes["T"])
+    elif args.c == 0:
         n_events=random.randrange(minTrans,(maxTrans+1))
     else:
         n_events = args.c
@@ -568,7 +587,13 @@ def mk_simu((i, tree_filename, OutDirNamePrefixTree), n_try = 0) :
     # Profil couple Simulation/Estimation PART ####
     ###############################################
 
-    SampledCATcouples = random.sample(CATcouples, Nb_sampled_couple)
+    #MODIFIED 20190301 JRW
+    if args.m_sampled_couple:
+        # set the profile pair manually
+        SampledCATcouples = [args.m_sampled_couple,]
+    else:
+        # get random profile pairs
+        SampledCATcouples = random.sample(CATcouples, Nb_sampled_couple)
 
     # Res list
     l_TPFPFNTN_mod_het = []
@@ -594,6 +619,21 @@ def mk_simu((i, tree_filename, OutDirNamePrefixTree), n_try = 0) :
         logger.debug("Tree_conv estim: %s", g_tree.treeconv_fn_est)
 
         ### on simule des sequences
+
+        # Negatif
+        ## MODIFIED JRW 20190315: moved this outside of the `c1!=c2` so I can do just negative sims too.
+        nameA = "%s_A%d_C%d" % (name0, c1, c1)
+        # $          bpp_lib.make_simul(nameA,nodesWithAncestralModel_sim,nodesWithTransitions,nodesWithConvergentModel,c1,c1,repseq,tree_simu,repbppconfig,outputInternalSequences=outputInternalSequences, number_of_sites=Nsites, nbCAT=NbCat_Sim,cz_nodes=cz_nodes)
+        bpp_lib.make_simul(nameA, c1, c1, g_tree, outputInternalSequences=outputInternalSequences,
+                           number_of_sites=Nsites, nbCAT=NbCat_Sim)
+
+        A_fasta_file = "%s/%s.fa" % (g_tree.repseq, nameA)
+        if not os.path.isfile(A_fasta_file):
+            logger.error("%s does not exist", A_fasta_file)
+            sys.exit(1)
+        else:
+            logger.debug("%s exists", A_fasta_file)
+
         if c1!=c2:
             # Positif
             nameAC="%s_A%d_C%d"%(name0,c1,c2)
@@ -605,18 +645,6 @@ def mk_simu((i, tree_filename, OutDirNamePrefixTree), n_try = 0) :
                 sys.exit(1)
             else:
                 logger.debug("%s exists", AC_fasta_file)
-
-            # Negatif
-            nameA="%s_A%d_C%d"%(name0,c1,c1)
-#$          bpp_lib.make_simul(nameA,nodesWithAncestralModel_sim,nodesWithTransitions,nodesWithConvergentModel,c1,c1,repseq,tree_simu,repbppconfig,outputInternalSequences=outputInternalSequences, number_of_sites=Nsites, nbCAT=NbCat_Sim,cz_nodes=cz_nodes)
-            bpp_lib.make_simul(nameA,c1,c1,g_tree, outputInternalSequences=outputInternalSequences, number_of_sites=Nsites, nbCAT=NbCat_Sim)
-
-            A_fasta_file = "%s/%s.fa" %(g_tree.repseq, nameA)
-            if not os.path.isfile(A_fasta_file):
-                logger.error("%s does not exist", A_fasta_file)
-                sys.exit(1)
-            else:
-                logger.debug("%s exists", A_fasta_file)
 
             if args.pcoc:
                 # Test optimal
