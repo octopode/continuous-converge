@@ -515,10 +515,8 @@ def main(contArgs, detArgv, simArgs, simArgv):
         pickleDir = os.path.join(simDir, "Pickles")
 
         # make pickle dir
-        try:
+        if not os.path.isdir(pickleDir):
             os.mkdir(pickleDir)
-        except:
-            pass
 
         # load all the available error curves into a DataFrame: metadata mapped to list of confidence thresholds
         availSims = loadSavedSims(pickleDir, tree_newick, simArgs, alpha = contArgs.sim_alpha_vals, beta = contArgs.sim_beta_vals)
