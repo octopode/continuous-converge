@@ -200,6 +200,10 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", blkBkgd=F
     # reorder alignment according to trait value
     ali.sort(key = lambda record: tipTraits[record.id])
 
+    # cull the tipTraits dict so it only contains taxa found in ali
+    alignTaxa = [record.id for record in ali]
+    tipTraits = {key:value for key, value in tipTraits.items() if key in alignTaxa}
+
     # plot basic MSA
     ali2plt(ali, fontsize=fontsize, rowSpacing=fontsize/10)
     plt.xlabel(xLabel, fontsize=fontsize*4)
