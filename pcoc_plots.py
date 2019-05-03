@@ -213,7 +213,8 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", blkBkgd=F
     tipTraits = {key:value for key, value in tipTraits.items() if key in alignTaxa}
 
     # plot basic MSA
-    ali2plt(ali, fontsize=fontsize, rowSpacing=fontsize/10)
+    #ali2plt(ali, fontsize=fontsize, rowSpacing=fontsize/5)
+    ali2plt(ali, fontsize=fontsize, rowSpacing=0)
     plt.xlabel(xLabel, fontsize=fontsize*4)
 
     # push this back to the parent script and have it fed to the plotting routine
