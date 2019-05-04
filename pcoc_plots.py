@@ -5,14 +5,11 @@ import sys
 import argparse
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from matplotlib import colors, gridspec, rcParams
-
-# activate latex text rendering
+# activate TrueType
 rcParams['pdf.fonttype'] = 42
 rcParams['ps.fonttype'] = 42
-rcParams['text.usetex'] = True
-#rc('text', usetex=True)
+import matplotlib.pyplot as plt
 
 from Bio import AlignIO
 
@@ -27,6 +24,10 @@ def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=
                  width=24, height=6, xLabel="amino acid site", prettySeqNames=None, fontsize=None, outPath=None):
 
     if blkBkgd: plt.style.use('dark_background')
+
+    '''if prettySeqNames:
+        # activate latex rendering
+        rcParams['text.usetex'] = True'''
 
     if elements > 0:
         revSort = False
