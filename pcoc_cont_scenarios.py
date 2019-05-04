@@ -635,7 +635,9 @@ def main(contArgs, detArgv, simArgs, simArgv):
                 # see if there is a lookup table for pretty taxon names
                 if contArgs.taxa_lookup:
                     # Load in dict of traits keyed on species. Note hardcoding of 'sp' colName!
-                    luTable = pd.read_table(contArgs.taxa_lookup, header=False, sep='\t')
+                    luTable = pd.read_table(contArgs.taxa_lookup, header=None, sep='\t')
+                    print "#LOOKUP"
+                    print luTable
                     prettySeqNames = luTable.set_index(luTable.columns[0]).transpose().to_dict(orient='r')[0]
                 else:
                     prettySeqNames = None
