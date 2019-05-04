@@ -6,8 +6,14 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.colors as colors
-import matplotlib.gridspec as gridspec
+from matplotlib import colors, gridspec, rcParams
+
+# activate latex text rendering
+rcParams['pdf.fonttype'] = 42
+rcParams['ps.fonttype'] = 42
+rcParams['text.usetex'] = True
+#rc('text', usetex=True)
+
 from Bio import AlignIO
 
 ### draw PCOC.ontinuous master figure with the specified elements
@@ -344,7 +350,7 @@ def ali2plt(ali, rowSpacing=None, xSpacing=10, yLabel=None, prettySeqNames=None,
     # y-axis formatting
     # This is needed to make the first row of the array correspond to 1st seq in MSA
     plt.gca().invert_yaxis()
-    plt.yticks([y + 0.5 for y in range(numSeqs)], seqNames, fontsize=fontsize, verticalalignment='center')
+    plt.yticks([y + 0.5 for y in range(numSeqs)], seqNames, fontsize=fontsize*2, verticalalignment='center')
     #ax.axes.get_yaxis().set_visible(False)
 
     #TODO: use pcolormesh(X, Y) to put breathing room between the aligned sequences
