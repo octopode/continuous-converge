@@ -45,7 +45,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stat
 from ast import literal_eval
-from ete3 import Tree, NodeStyle, TreeStyle, TextFace, CircleFace
+from ete3 import Tree#, NodeStyle, TreeStyle, TextFace, CircleFace
 from shutil import rmtree
 from time import sleep
 from Bio import AlignIO
@@ -81,6 +81,7 @@ def parse_args(argv):
     Options.add_argument('-aa', '--aa_align', type=str, help="AA alignment name")
     #Options.add_argument('-i', '--invert_trait', action="store_true",
     #                     help="Invert the binary trait, i.e. assert that low trait value is the convergent state")
+    Options.add_argument('-lu', '--taxa_lookup', type=str, default=None, help="name of lookup table for pretty taxon names")
     Options.add_argument('-nb', '--num_bins', type=int, default=0,
                          help="Average continuous trait into n equal-width bins, 0 = no binning")
     Options.add_argument('-bw', '--bin_width', type=float, default=0,
@@ -631,12 +632,20 @@ def main(contArgs, detArgv, simArgs, simArgv):
 
             # if figures are requested
             if contArgs.figure is not None:
+                # see if there is a lookup table for pretty taxon names
+                if contArgs.taxa_lookup:
+                    # Load in dict of traits keyed on species. Note hardcoding of 'sp' colName!
+                    luTable = pd.read_table(contArgs.taxa_lookup, header=False, sep='\t')
+                    prettySeqNames = luTable.set_index(luTable.columns[0]).transpose().to_dict(orient='r')[0]
+                else:
+                    prettySeqNames = None
+
                 figPath = os.path.join(contArgs.output, aliBasename + "_key-" + sp + "_figure.pdf")
                 # remap the alignment itself
                 aliMapped = reindexAlignment(ali, sp)
                 # save figure keyed on sp
-                pviz.masterFigure(plotDfMapped, aliMapped, tipTraits, elements=contArgs.figure, outPath=figPath,
-                              alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals, xLabel="amino acid site in {}".format(sp))
+                pviz.masterFigure(plotDfMapped, aliMapped, tipTraits, elements=contArgs.figure, prettySeqNames=prettySeqNames,
+                                  outPath=figPath, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals, xLabel="amino acid site in {}".format(sp))
                 logger.info("Figure saved at {}".format(figPath))
 
     # results are always output for the original alignment, with gaps
