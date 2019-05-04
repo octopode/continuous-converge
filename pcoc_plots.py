@@ -11,15 +11,25 @@ import matplotlib.gridspec as gridspec
 from Bio import AlignIO
 
 ### draw PCOC.ontinuous master figure with the specified elements
-### 0 plots everything
-### 1 plots just the Manhattan
-### 2 plots just the highlighted alignment
-def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, thresPP=[0.8, 0.9, 0.95], blkBkgd=False,
-                 width=24, height=6, xLabel="amino acid site", fontsize=None, outPath=None):
+### 0 plots nothing
+### 1 plots everything
+### 2 plots just the Manhattan
+### 3 plots just the highlighted alignment
+### a negative number will reverse the order of the plotted alignment so the high trait values are at the top
+
+def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=[0.8, 0.9, 0.95], blkBkgd=False,
+                 width=24, height=6, xLabel="amino acid site", prettySeqNames=None, fontsize=None, outPath=None):
 
     if blkBkgd: plt.style.use('dark_background')
 
-    if elements == 0:
+    if elements > 0:
+        revSort = False
+    elif elements < 0:
+        revSort = True
+
+    elements = abs(elements)
+
+    if elements == 1:
 
         if not fontsize:
             fontsize = min(2 * height, 75 * width / len(df))
@@ -38,10 +48,10 @@ def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, thresPP=
         plt.xlabel('')
         # plot alignment
         plt.subplot(ax[1])
-        alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, fontsize=fontsize)
+        alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, revSort=revSort, prettySeqNames=prettySeqNames, fontsize=fontsize)
 
 
-    elif elements == 1:
+    elif elements == 2:
         if not fontsize:
             fontsize = min(4 * height, 75 * width / len(df))
 
@@ -49,17 +59,18 @@ def masterFigure(df, ali, tipTraits, elements=0, alpha=None, beta=None, thresPP=
         # plot Manhattan
         manhattanPlot(df, alpha=alpha, beta=beta, thresPP=thresPP, xLabel=xLabel, fontsize=fontsize)
 
-    elif elements == 2:
+    elif elements == 3:
         if not fontsize:
             fontsize = min(4 * height, 75 * width / len(df))
 
         fig, ax = plt.subplots()
-        alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, fontsize=fontsize)
+        alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, revSort=revSort, prettySeqNames=prettySeqNames, fontsize=fontsize)
 
-    # save the figure
-    plt.tight_layout()
-    fig.set_size_inches(width, height)
-    plt.savefig(outPath)
+    if elements != 0:
+        # save the figure
+        plt.tight_layout()
+        fig.set_size_inches(width, height)
+        plt.savefig(outPath)
 
 
 
@@ -183,7 +194,7 @@ def manhattanPlot(df, thresPP=[0.8, 0.9, 0.95], alpha=None, beta=None,
 
 ### Draw an amino acid alignment with called columns and their trait cutoffs highlighted
 ### Number of red asterisks drawn on the cutoff indicates level of significance
-def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", blkBkgd=False, width=20, height=8, fontsize=None, outPath=None):
+def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", revSort=False, prettySeqNames=None, blkBkgd=False, width=20, height=8, fontsize=None, outPath=None):
 
     if blkBkgd: plt.style.use('dark_background')
 
@@ -206,7 +217,7 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", blkBkgd=F
         fontsize = min(2.5 * height, 75 * width / len(df))
 
     # reorder alignment according to trait value
-    ali.sort(key = lambda record: tipTraits[record.id])
+    ali.sort(key = lambda record: tipTraits[record.id], reverse=revSort)
 
     # cull the tipTraits dict so it only contains taxa found in ali
     alignTaxa = [record.id for record in ali]
@@ -214,7 +225,7 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", blkBkgd=F
 
     # plot basic MSA
     #ali2plt(ali, fontsize=fontsize, rowSpacing=fontsize/5)
-    ali2plt(ali, fontsize=fontsize, rowSpacing=0)
+    ali2plt(ali, fontsize=fontsize, rowSpacing=0, prettySeqNames=prettySeqNames)
     plt.xlabel(xLabel, fontsize=fontsize*4)
 
     # push this back to the parent script and have it fed to the plotting routine
@@ -263,7 +274,7 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", blkBkgd=F
 
 ### Use a BioPython MSA object and embedded color scheme to plot an amino acid alignment
 ### Uses plt.pcolormesh()
-def ali2plt(ali, rowSpacing=None, xSpacing=10, yLabel=None, blkBkgd=False, fontsize=None):
+def ali2plt(ali, rowSpacing=None, xSpacing=10, yLabel=None, prettySeqNames=None, blkBkgd=False, fontsize=None):
 
     # color schemes
     shapely = {
@@ -309,7 +320,13 @@ def ali2plt(ali, rowSpacing=None, xSpacing=10, yLabel=None, blkBkgd=False, fonts
 
     numSeqs = len(ali)
     numSites = ali.get_alignment_length()
-    seqNames = [record.id for record in ali]
+
+    if not prettySeqNames:
+        # just use the headers to label the alignment
+        seqNames = [record.id for record in ali]
+    else:
+        # use the provided lookup table to get the labels
+        seqNames = [prettySeqNames[record.id] for record in ali]
 
     # if font size not specified by caller, attempt to autoscale
     if not fontsize:
@@ -327,7 +344,7 @@ def ali2plt(ali, rowSpacing=None, xSpacing=10, yLabel=None, blkBkgd=False, fonts
     # y-axis formatting
     # This is needed to make the first row of the array correspond to 1st seq in MSA
     plt.gca().invert_yaxis()
-    plt.yticks([y + 0.5 for y in range(numSeqs)], seqNames, fontsize=fontsize*2, verticalalignment='center')
+    plt.yticks([y + 0.5 for y in range(numSeqs)], seqNames, fontsize=fontsize, verticalalignment='center')
     #ax.axes.get_yaxis().set_visible(False)
 
     #TODO: use pcolormesh(X, Y) to put breathing room between the aligned sequences
