@@ -105,6 +105,7 @@ def parse_args(argv):
                          help="Override significance level of sites with stationary pairs of ML profiles. None -> bootstrap, 0 -> call indeterminate, -1 -> call negative")
     Options.add_argument('-k', '--key_seq', type=str, nargs='*', default=None, help="Names of key sequences on which to index the output columns")
     Options.add_argument('-fig', '--figure', type=int, default=None, help="Figure elements to output. 0 -> Manhattan with alignment; 1 -> Manhattan; 2 -> Shaded alignment")
+    Options.add_argument('-x', '--xlim', type=int, nargs='+', default=None, help="Figure elements to output. 0 -> Manhattan with alignment; 1 -> Manhattan; 2 -> Shaded alignment")
     Options.add_argument('-pp', '--pp_thres', type=list, default=[0.8, 0.9, 0.95], help="PP thresholds to highlight in output")
     #Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
     #Options.add_argument('-hm', '--heatmap', type=str,
@@ -644,7 +645,7 @@ def main(contArgs, detArgv, simArgs, simArgv):
                 # remap the alignment itself
                 aliMapped = reindexAlignment(ali, sp)
                 # save figure keyed on sp
-                pviz.masterFigure(plotDfMapped, aliMapped, tipTraits, elements=contArgs.figure, prettySeqNames=prettySeqNames,
+                pviz.masterFigure(plotDfMapped, aliMapped, tipTraits, elements=contArgs.figure, prettySeqNames=prettySeqNames, xlim=contArgs.xlim,
                                   outPath=figPath, alpha=contArgs.sim_alpha_vals, beta=contArgs.sim_beta_vals, xLabel="amino acid site in {}".format(sp))
                 logger.info("Figure saved at {}".format(figPath))
 
