@@ -21,7 +21,7 @@ from Bio import AlignIO
 ### a negative number will reverse the order of the plotted alignment so the high trait values are at the top
 
 def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=[0.8, 0.9, 0.95], xlim=None, blkBkgd=False,
-                 width=7.08, height=9, xLabel="amino acid site", prettySeqNames=None, fontsize=9, outPath=None):
+                 width=7.08, height=4, xLabel="amino acid site", prettySeqNames=None, fontsize=None, outPath=None):
     #NTS 20190506: default size set to ICB 2-column; fontsize set to 9. Previously 24x6 and None.
 
     if blkBkgd: plt.style.use('dark_background')
@@ -55,7 +55,7 @@ def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=
         # take away the xlabel
         plt.xlabel('')
         # crop x-axis if specified
-        if xlim: plt.xlim(xlim)
+        if xlim: plt.xlim([x + 0.5 for x in xlim])
         # plot alignment
         plt.subplot(ax[1])
         alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, revSort=revSort, prettySeqNames=prettySeqNames, fontsize=fontsize)
@@ -70,7 +70,7 @@ def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=
         # plot Manhattan
         manhattanPlot(df, alpha=alpha, beta=beta, thresPP=thresPP, xLabel=xLabel, fontsize=fontsize)
         # crop x-axis if specified
-        if xlim: plt.xlim(xlim)
+        if xlim: plt.xlim([x + 0.5 for x in xlim])
 
     elif elements == 3:
         if not fontsize:
