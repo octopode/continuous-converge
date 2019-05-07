@@ -20,8 +20,8 @@ from Bio import AlignIO
 ### 3 plots just the highlighted alignment
 ### a negative number will reverse the order of the plotted alignment so the high trait values are at the top
 
-def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=[0.8, 0.9, 0.95], blkBkgd=False,
-                 width=24, height=6, xLabel="amino acid site", prettySeqNames=None, fontsize=None, outPath=None):
+def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=[0.8, 0.9, 0.95], xlim=None, blkBkgd=False,
+                 width=7.08, height=9, xLabel="amino acid site", prettySeqNames=None, fontsize=None, outPath=None):
 
     if blkBkgd: plt.style.use('dark_background')
 
@@ -74,6 +74,8 @@ def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=
         alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, revSort=revSort, prettySeqNames=prettySeqNames, fontsize=fontsize)
 
     if elements != 0:
+        # crop x-axis if specified
+        if xlim: plt.xlim(xlim)
         # save the figure
         plt.tight_layout()
         fig.set_size_inches(width, height)
