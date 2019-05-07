@@ -21,7 +21,8 @@ from Bio import AlignIO
 ### a negative number will reverse the order of the plotted alignment so the high trait values are at the top
 
 def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=[0.8, 0.9, 0.95], xlim=None, blkBkgd=False,
-                 width=7.08, height=9, xLabel="amino acid site", prettySeqNames=None, fontsize=None, outPath=None):
+                 width=7.08, height=9, xLabel="amino acid site", prettySeqNames=None, fontsize=9, outPath=None):
+    #NTS 20190506: default size set to ICB 2-column; fontsize set to 9. Previously 24x6 and None.
 
     if blkBkgd: plt.style.use('dark_background')
 
@@ -53,10 +54,13 @@ def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=
         manhattanPlot(df, alpha=alpha, beta=beta, thresPP=thresPP, fontsize=fontsize)
         # take away the xlabel
         plt.xlabel('')
+        # crop x-axis if specified
+        if xlim: plt.xlim(xlim)
         # plot alignment
         plt.subplot(ax[1])
         alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, revSort=revSort, prettySeqNames=prettySeqNames, fontsize=fontsize)
-
+        # crop x-axis if specified
+        if xlim: plt.xlim(xlim)
 
     elif elements == 2:
         if not fontsize:
@@ -65,6 +69,8 @@ def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=
         fig, ax = plt.subplots()
         # plot Manhattan
         manhattanPlot(df, alpha=alpha, beta=beta, thresPP=thresPP, xLabel=xLabel, fontsize=fontsize)
+        # crop x-axis if specified
+        if xlim: plt.xlim(xlim)
 
     elif elements == 3:
         if not fontsize:
@@ -72,10 +78,10 @@ def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=
 
         fig, ax = plt.subplots()
         alignmentHighlighted(df, ali, tipTraits, xLabel=xLabel, revSort=revSort, prettySeqNames=prettySeqNames, fontsize=fontsize)
-
-    if elements != 0:
         # crop x-axis if specified
         if xlim: plt.xlim(xlim)
+
+    if elements != 0:
         # save the figure
         plt.tight_layout()
         fig.set_size_inches(width, height)
