@@ -21,7 +21,7 @@ from Bio import AlignIO
 ### a negative number will reverse the order of the plotted alignment so the high trait values are at the top
 
 def masterFigure(df, ali, tipTraits, elements=1, alpha=None, beta=None, thresPP=[0.8, 0.9, 0.95], xlim=None, blkBkgd=False,
-                 width=7.08, height=4, xLabel="amino acid site", prettySeqNames=None, fontsize=None, outPath=None):
+                 width=24, height=6, xLabel="amino acid site", prettySeqNames=None, fontsize=None, outPath=None):
     #NTS 20190506: default size set to ICB 2-column; fontsize set to 9. Previously 24x6 and None.
 
     if blkBkgd: plt.style.use('dark_background')
@@ -241,7 +241,7 @@ def alignmentHighlighted(df, ali, tipTraits, xLabel="amino acid site", revSort=F
     # plot basic MSA
     #ali2plt(ali, fontsize=fontsize, rowSpacing=fontsize/5)
     ali2plt(ali, fontsize=fontsize, rowSpacing=0, prettySeqNames=prettySeqNames)
-    plt.xlabel(xLabel, fontsize=fontsize*4)
+    plt.xlabel(xLabel, fontsize=fontsize*2.5)
 
     # push this back to the parent script and have it fed to the plotting routine
     # add a significance level column to the dataFrame: 0 (not sig) -> index of the most stringent alpha cutoff
