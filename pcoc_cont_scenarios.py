@@ -94,18 +94,18 @@ def parse_args(argv):
     Options.add_argument('-i', '--instances', type=int, default=1, help="Max number of pcoc_det instances to run concurrently (default: 1)")
     Options.add_argument('--det', action="store_true", help="Set to actually run pcoc_det.py")
     Options.add_argument('--max_gap_allowed', type=int,
-                            help="max gap allowed to take into account a site (in %%), must be between 0 and 100 (default:5%%)",
+                            help="max gap allowed to take into account a site (in %%), must be between 0 and 100 (default: 5%%)",
                             default=5)
     Options.add_argument('--sim', action="store_true", help="Set to run post hoc simulation")
     Options.add_argument('--sim_pp_thres', type=float, default=0.5, help="Set PCOC PP threshold for running a post hoc simulation, 0.0001 = all sites")
     Options.add_argument('--sim_alpha_vals', type=float, nargs='*', default=[0.10, 0.05, 0.01], help="alpha values to test in post hoc simulations")
     Options.add_argument('--sim_beta_vals', type=float, nargs='*', default=[0.6, 0.8, 0.9], help="beta values to test in post hoc simulations")
-    Options.add_argument('--sim_no_cleanup', action="store_true", help="Set to retain all the sequence sim and error estimation siles")
+    Options.add_argument('--sim_no_cleanup', action="store_true", help="Set to retain all the sequence sim and error estimation files")
     Options.add_argument('-s', '--call_stationary', type=int, choices=(None,0,-1), default=None,
                          help="Override significance level of sites with stationary pairs of ML profiles. None -> bootstrap, 0 -> call indeterminate, -1 -> call negative")
     Options.add_argument('-k', '--key_seq', type=str, nargs='*', default=None, help="Names of key sequences on which to index the output columns")
     Options.add_argument('-fig', '--figure', type=int, default=None, help="Figure elements to output. 0 -> Manhattan with alignment; 1 -> Manhattan; 2 -> Shaded alignment")
-    Options.add_argument('-x', '--xlim', type=int, nargs='+', default=None, help="Figure elements to output. 0 -> Manhattan with alignment; 1 -> Manhattan; 2 -> Shaded alignment")
+    Options.add_argument('-x', '--xlim', type=int, nargs='+', default=None, help="First and last columns to crop to when plotting results")
     Options.add_argument('-pp', '--pp_thres', type=list, default=[0.8, 0.9, 0.95], help="PP thresholds to highlight in output")
     #Options.add_argument('-m', '--master_table', type=str, help="Save collated master data table at...")
     #Options.add_argument('-hm', '--heatmap', type=str,
