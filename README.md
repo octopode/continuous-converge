@@ -14,7 +14,8 @@ trait; `pcoc_det.py` requires a binary one.
 
 ### Outline of Analysis
 `pcoc_cont_scenarios` executes as follows (illustrated in this flowchart):
-![continuous PCOC workflow](https://github.com/octopode/continuous-converge/images/ICB-2019-0105_Fig3.png "continuous PCOC workflow")
+
+![continuous PCOC workflow](https://github.com/octopode/continuous-converge/blob/master/images/ICB-2019-0105_Fig3.png "continuous PCOC workflow")
 
 1. Perform an ancestral trait reconstruction using the supplied species tree
 and continuous trait table. At time of writing, this is a simple Brownian motion
@@ -46,7 +47,7 @@ for downstream analysis. ('C' above)
 
 8. Superimpose these confidence intervals on the Manhattan plot. Running steps 1-7 above will give output like this:
 
-![example cont-PCOC output](https://github.com/octopode/continuous-converge/images/ICB-2019-0105_Fig5.png "NADH binding sites in ctenophore dehydrogenases")
+![example cont-PCOC output](https://github.com/octopode/continuous-converge/blob/master/images/ICB-2019-0105_Fig5.png "NADH binding sites in ctenophore dehydrogenases")
 
 Secondary-structural motifs were manually painted into this figure based on results from I-TASSER. The column range is cropped with option `--xlim`, e.g. `--xlim 43 93` for panel 'A'.
 
