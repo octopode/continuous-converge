@@ -1,6 +1,6 @@
 # continuous-converge
 prototype scripts for detecting convergent adaptation of continuous traits at the amino acid level
-Continuous PCOC scripts and the ctenophore enzyme alignments in this repo are featured in **Combing Transcriptomes for Secrets of Deep-Sea Survival: Environmental Diversity Drives Patterns of Protein Evolution** [(Winnikoff et al., ICB 2018)](dx.doi.org/10.1093/icb/icz063), Open Access. They were also presented at the **Convergent Adaptation to Polar Environments Workshop** in Tampa, FL on Jan. 3, 2019.
+Continuous PCOC scripts and the ctenophore enzyme alignments in this repo are featured in **Combing Transcriptomes for Secrets of Deep-Sea Survival: Environmental Diversity Drives Patterns of Protein Evolution** [(Winnikoff et al., ICB 2018)](http://dx.doi.org/10.1093/icb/icz063), Open Access. They were also presented at the **Convergent Adaptation to Polar Environments Workshop** in Tampa, FL on Jan. 3, 2019.
 
 As of 1/13/19, the scripts here implement two distinct methods: **PCOC** and **CPGLS**.
 
